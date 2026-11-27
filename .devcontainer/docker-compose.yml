@@ -1,0 +1,33 @@
+# Codespaces / Dev Containers: PostgreSQL + the app (auto-started with demo data).
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    volumes:
+      - ..:/workspaces/football-scouting:cached
+    environment:
+      DATABASE_URL: postgresql+psycopg://raja:raja@db:5432/raja_scout
+      SEED_SAMPLE_DATA: "true"
+    # The app server starts with the container; --reload picks up code edits.
+    command: bash -c "cd /workspaces/football-scouting/backend && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: raja_scout
+      POSTGRES_USER: raja
+      POSTGRES_PASSWORD: raja
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U raja -d raja_scout"]
+      interval: 3s
+      retries: 20
+
+volumes:
+  pgdata:

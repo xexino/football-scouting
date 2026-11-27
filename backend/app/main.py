@@ -32,7 +32,8 @@ def init_db(seed: bool | None = None) -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    init_db()
+    if settings.init_on_startup:
+        init_db()
     yield
 
 

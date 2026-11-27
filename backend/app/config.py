@@ -44,7 +44,15 @@ class Settings:
         default_factory=lambda: int(os.getenv("LOGIN_LOCKOUT_SECONDS", "900"))
     )
 
+    # Run table creation / demo seeding inside the web process. Disable when a separate
+    # bootstrap step runs first (Docker image), so several workers don't race.
+    init_on_startup: bool = field(default_factory=lambda: _bool("INIT_ON_STARTUP", True))
+
     def __post_init__(self) -> None:
+        # Hosting providers give "postgres://" or "postgresql://" URLs; use the psycopg 3 driver.
+        for prefix in ("postgres://", "postgresql://"):
+            if self.database_url.startswith(prefix):
+                self.database_url = "postgresql+psycopg://" + self.database_url[len(prefix):]
         if not self.secret_key:
             if self.env == "production":
                 raise RuntimeError("SECRET_KEY must be set in production")

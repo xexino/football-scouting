@@ -1,5 +1,6 @@
 """Management commands.
 
+    python -m app.cli bootstrap                   # create tables; seed demo data if SEED_SAMPLE_DATA=true
     python -m app.cli init-db                     # create tables (no sample data)
     python -m app.cli seed-demo                   # load FICTIONAL demo data + demo users
     python -m app.cli create-user EMAIL "Full Name" ROLE   # prompts for password
@@ -21,6 +22,12 @@ from .models import ROLES, User
 def init_db() -> None:
     Base.metadata.create_all(engine)
     print("Tables created.")
+
+
+def bootstrap() -> None:
+    from .main import init_db as app_init
+    app_init()
+    print("Bootstrap complete.")
 
 
 def seed_demo() -> None:
@@ -64,7 +71,7 @@ def schema_sql() -> None:
 
 
 def main(argv: list[str]) -> None:
-    cmds = {"init-db": init_db, "seed-demo": seed_demo, "create-user": create_user, "schema-sql": schema_sql}
+    cmds = {"bootstrap": bootstrap, "init-db": init_db, "seed-demo": seed_demo, "create-user": create_user, "schema-sql": schema_sql}
     if not argv or argv[0] not in cmds:
         sys.exit(__doc__)
     cmds[argv[0]](*argv[1:])
