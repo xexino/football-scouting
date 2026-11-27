@@ -1,4 +1,7 @@
-"""Fictional demonstration data.
+"""Fictional demonstration data (demo deployments only).
+
+All of it lives inside a dedicated demo ORGANIZATION flagged ``is_demo`` — nothing is
+created as shared reference data, so a customer environment never sees it.
 
 EVERYTHING created here is FICTIONAL: players, clubs, leagues, statistics, fees, reports.
 Each record is flagged ``is_fictional=True`` and linked to the data source
@@ -16,6 +19,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .models import (
+    Membership,
+    Organization,
+    PlayerAssessment,
     Club,
     DataSource,
     League,
@@ -32,6 +38,7 @@ from .models import (
 from .report_generator import generate_report
 from .models import ScoutingReport
 from .security import hash_password
+from .tenancy import SYSTEM, set_tenant
 
 FICTIONAL_SOURCE = "FICTIONAL SAMPLE DATA"
 DEMO_USERS = [
@@ -169,24 +176,36 @@ def _stat_line(rng: random.Random, pos: str, talent: float, minutes: int, apps: 
     return line
 
 
-def create_demo_users(db: Session) -> dict[str, User]:
+DEMO_ORG_SLUG = "demo-fc"
+
+
+def create_demo_users(db: Session, org: Organization) -> dict[str, User]:
     password = os.getenv("DEMO_PASSWORD", "RajaDemo2026!")
     users = {}
     for email, name, role, region in DEMO_USERS:
         u = db.scalar(select(User).where(User.email == email))
         if u is None:
-            u = User(email=email, full_name=name, role=role, region=region, hashed_password=hash_password(password))
+            u = User(email=email, full_name=name, hashed_password=hash_password(password))
             db.add(u)
+            db.flush()
+        db.add(Membership(user_id=u.id, organization_id=org.id, role=role, region=region))
         users[role if role != "regional_scout" else email] = u
     db.flush()
     return users
 
 
 def seed(db: Session, n_players: int = 96) -> None:
-    if db.scalar(select(DataSource).where(DataSource.name == FICTIONAL_SOURCE)):
+    set_tenant(db, SYSTEM)
+    if db.scalar(select(Organization).where(Organization.slug == DEMO_ORG_SLUG)):
         return
+    org = Organization(slug=DEMO_ORG_SLUG, name="Demo FC (fictional)", short_name="Demo FC", country="Morocco",
+                       primary_language="en", currency="EUR", is_demo=True,
+                       settings={"demo_notice": "All data in this organization is fictional."})
+    db.add(org)
+    db.flush()
     rng = random.Random(20261127)
-    users = create_demo_users(db)
+    users = create_demo_users(db, org)
+    set_tenant(db, org.id)  # everything below is private to the demo organization
     director = users["sporting_director"]
     head = users["head_of_scouting"]
     analyst = users["data_analyst"]
@@ -197,8 +216,8 @@ def seed(db: Session, n_players: int = 96) -> None:
     src = DataSource(name=FICTIONAL_SOURCE, source_type="fictional_sample", is_fictional=True,
                      license_notes="Randomly generated demonstration data. Not real. Do not use for decisions.")
     db.add(src)
-    db.add(DataSource(name="Raja internal scouting", source_type="scout_observation",
-                      license_notes="Observations recorded by Raja CA staff."))
+    db.add(DataSource(name="Internal scouting", source_type="scout_observation",
+                      license_notes="Observations recorded by the organization's own staff."))
     db.flush()
 
     leagues = []
@@ -244,23 +263,25 @@ def seed(db: Session, n_players: int = 96) -> None:
         months_left = (expiry.year - today.year) * 12 + expiry.month - today.month
         availability = ("contract_expiring" if months_left <= 12 else
                         rng.choice(["unknown", "unknown", "available", "transfer_listed", "loan_possible", "not_available"]))
+        nationality = NATIONALITY_BY_COUNTRY[club.country] if rng.random() < 0.75 \
+            else rng.choice(list(NATIONALITY_BY_COUNTRY.values()))
+        secondary = rng.sample(SECONDARY[pos], k=min(len(SECONDARY[pos]), rng.randint(0, 2)))
+        tactical_role = rng.choice(ROLE_NAMES[pos])
+        weight = int(height - 100 + rng.gauss(-4, 4))
+        foot = rng.choices(["right", "left", "both"], [70, 25, 5])[0]
+        salary = int(round(fee * rng.uniform(0.12, 0.25), -3))
         p = Player(
-            full_name=name, date_of_birth=dob, nationality=NATIONALITY_BY_COUNTRY[club.country] if rng.random() < 0.75
-            else rng.choice(list(NATIONALITY_BY_COUNTRY.values())),
-            current_club_id=club.id, primary_position=pos,
-            secondary_positions=rng.sample(SECONDARY[pos], k=min(len(SECONDARY[pos]), rng.randint(0, 2))),
-            tactical_role=rng.choice(ROLE_NAMES[pos]), height_cm=height,
-            weight_kg=int(height - 100 + rng.gauss(-4, 4)),
-            preferred_foot=rng.choices(["right", "left", "both"], [70, 25, 5])[0],
-            physical_profile=None, contract_expiry=expiry, estimated_fee_eur=fee,
-            fee_estimate_source="Fictional estimate (demo)",
-            salary_expectation_eur=int(round(fee * rng.uniform(0.12, 0.25), -3)),
-            availability=availability, data_source_id=src.id, is_fictional=True,
+            full_name=name, date_of_birth=dob, nationality=nationality, current_club_id=club.id,
+            primary_position=pos, secondary_positions=secondary, height_cm=height, weight_kg=weight,
+            preferred_foot=foot, contract_expiry=expiry, data_source_id=src.id, is_fictional=True,
             source_reference=f"FICT-{1000 + i}",
         )
         p.club = club
         db.add(p)
         db.flush()
+        db.add(PlayerAssessment(player_id=p.id, tactical_role=tactical_role, estimated_fee=fee,
+                                fee_estimate_source="Fictional estimate (demo)", salary_expectation=salary,
+                                availability=availability))
         for season, prev_club in (("2024-25", club), ("2025-26", club)):
             apps = rng.randint(6, 30)
             starts = rng.randint(max(0, apps - 8), apps)
@@ -314,7 +335,7 @@ def seed(db: Session, n_players: int = 96) -> None:
             e.rejection_reason = "Data and video profile below role requirements (fictional demo)."
         e.updated_at = t
 
-    db.add(RecruitmentBudget(season="2026-27", transfer_budget_eur=6_000_000, wage_budget_eur=2_500_000,
+    db.add(RecruitmentBudget(season="2026-27", transfer_budget=6_000_000, wage_budget=2_500_000,
                              notes="FICTIONAL demo budget"))
     db.commit()
 

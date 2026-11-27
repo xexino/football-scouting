@@ -10,7 +10,7 @@ from .. import audit
 from ..database import get_db
 from ..importers import import_player, import_stats, parse_csv, run_rows, template_csv
 from ..models import DataSource, User
-from ..security import has_permission, require
+from ..security import Ctx, has_permission, require
 
 router = APIRouter(prefix="/api/import", tags=["data import"])
 
@@ -21,11 +21,13 @@ def _source(db: Session, source_id: int) -> DataSource:
     src = db.get(DataSource, source_id)
     if src is None:
         raise HTTPException(422, "Unknown data source. Register the source (with licence notes) before importing.")
+    if src.organization_id is None:
+        raise HTTPException(422, "Imports must use one of your organization's own data sources")
     return src
 
 
 @router.get("/templates/{kind}.csv", response_class=PlainTextResponse)
-def template(kind: str, _: User = Depends(require("import:run"))):
+def template(kind: str, _: Ctx = Depends(require("import:run"))):
     if kind not in ("players", "stats"):
         raise HTTPException(404, "Unknown template")
     return PlainTextResponse(template_csv(kind), media_type="text/csv",
@@ -41,7 +43,7 @@ async def _read(file: UploadFile) -> bytes:
 
 @router.post("/players", summary="Import player profiles from CSV")
 async def import_players_csv(request: Request, file: UploadFile = File(...), data_source_id: int = Form(...),
-                             dry_run: bool = Form(False), user: User = Depends(require("import:run")),
+                             dry_run: bool = Form(False), user: Ctx = Depends(require("import:run")),
                              db: Session = Depends(get_db)):
     src = _source(db, data_source_id)
     rows = parse_csv(await _read(file))
@@ -52,7 +54,7 @@ async def import_players_csv(request: Request, file: UploadFile = File(...), dat
 
 @router.post("/stats", summary="Import season statistics from CSV")
 async def import_stats_csv(request: Request, file: UploadFile = File(...), data_source_id: int = Form(...),
-                           dry_run: bool = Form(False), user: User = Depends(require("import:run", "stats:write")),
+                           dry_run: bool = Form(False), user: Ctx = Depends(require("import:run", "stats:write")),
                            db: Session = Depends(get_db)):
     src = _source(db, data_source_id)
     rows = parse_csv(await _read(file))
@@ -68,7 +70,7 @@ class JsonImport(BaseModel):
 
 
 @router.post("/json", summary="Import players and stats as JSON (for provider adapters / ETL jobs)")
-def import_json(body: JsonImport, request: Request, user: User = Depends(require("import:run", "stats:write")),
+def import_json(body: JsonImport, request: Request, user: Ctx = Depends(require("import:run", "stats:write")),
                 db: Session = Depends(get_db)):
     src = _source(db, body.data_source_id)
     fin = has_permission(user, "financials:read")

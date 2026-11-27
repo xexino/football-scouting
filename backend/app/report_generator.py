@@ -22,6 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from .analytics import METRICS, TACTICAL_ROLES, age_on, analyse_player, ordinal, role_fit, strengths_weaknesses
+from .assessments import get_assessment
 from .models import MatchReport, MatchVideo, Player, POSITION_LABELS
 
 TECHNICAL_METRICS = ["pass_pct", "prog_passes_p90", "key_passes_p90", "dribble_pct", "dribbles_p90",
@@ -64,6 +65,9 @@ def _avg_rating(reports: list[MatchReport], field: str) -> dict | None:
 
 def generate_report(db: Session, player: Player, season: str | None = None, tactical_role: str | None = None) -> dict:
     a = analyse_player(db, player, season)
+    assessment = get_assessment(db, player.id)  # this organization's private view only
+    availability = assessment.availability if assessment else "unknown"
+    physical_profile = assessment.physical_profile if assessment else None
     data_type = "fictional_sample" if player.is_fictional else "verified_data"
     src = ", ".join(a.get("provenance", {}).get("sources", [])) if a.get("has_data") else None
     profile_src = player.data_source.name if player.data_source else "Player record"
@@ -85,7 +89,7 @@ def generate_report(db: Session, player: Player, season: str | None = None, tact
               f"{' / ' + player.second_nationality if player.second_nationality else ''}.", profile_src),
         _item(data_type, f"Club: {club.name if club else 'n/a'}"
               f"{' (' + club.league.name + ')' if club and club.league else ''}. Contract expiry: {player.contract_expiry or 'n/a'}."
-              f" Availability: {player.availability.replace('_', ' ')}.", profile_src),
+              f" Availability (club assessment): {availability.replace('_', ' ')}.", profile_src),
         _item(data_type, f"Position: {POSITION_LABELS.get(player.primary_position)}"
               f"{'; also ' + ', '.join(player.secondary_positions) if player.secondary_positions else ''}."
               f" Preferred foot: {player.preferred_foot or 'n/a'}. Height: {player.height_cm or 'n/a'} cm.", profile_src),
@@ -152,8 +156,8 @@ def generate_report(db: Session, player: Player, season: str | None = None, tact
     phys = []
     if player.height_cm or player.weight_kg:
         phys.append(_item(data_type, f"Height {player.height_cm or 'n/a'} cm, weight {player.weight_kg or 'n/a'} kg.", profile_src))
-    if player.physical_profile:
-        phys.append(_item("scout_opinion", player.physical_profile, source="Player record — physical profile notes"))
+    if physical_profile:
+        phys.append(_item("scout_opinion", physical_profile, source="Club assessment — physical profile notes"))
     phys += _scout_items(reports, "physical_notes")
     r = _avg_rating(reports, "physical_rating")
     phys += [r] if r else []

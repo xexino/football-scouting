@@ -3,7 +3,9 @@
     python -m app.cli bootstrap                   # create tables; seed demo data if SEED_SAMPLE_DATA=true
     python -m app.cli init-db                     # create tables (no sample data)
     python -m app.cli seed-demo                   # load FICTIONAL demo data + demo users
-    python -m app.cli create-user EMAIL "Full Name" ROLE   # prompts for password
+    python -m app.cli create-org SLUG "Club name" [COUNTRY] [CURRENCY] [LANG]
+    python -m app.cli create-user EMAIL "Full Name" ROLE ORG_SLUG   # prompts for password
+    python -m app.cli create-user EMAIL "Full Name" platform_admin  # SaaS operator, no tenant data
     python -m app.cli schema-sql > ../docs/schema.sql      # PostgreSQL DDL
 """
 from __future__ import annotations
@@ -15,13 +17,14 @@ from sqlalchemy import select
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.schema import CreateIndex, CreateTable
 
-from .database import Base, SessionLocal, engine
+from .database import Base, SessionLocal
+from .tenancy import SYSTEM, set_tenant
 from .models import ROLES, User
 
 
 def init_db() -> None:
-    Base.metadata.create_all(engine)
-    print("Tables created.")
+    from .migrate import migrate_database
+    print("Schema:", migrate_database())
 
 
 def bootstrap() -> None:
@@ -32,19 +35,16 @@ def bootstrap() -> None:
 
 def seed_demo() -> None:
     from .seed import seed
-    Base.metadata.create_all(engine)
+    init_db()
     with SessionLocal() as db:
         seed(db)
     print("Fictional demo data loaded.")
 
 
-def create_user(email: str, full_name: str, role: str) -> None:
+def _prompt_password() -> str:
     from fastapi import HTTPException
 
-    from .security import hash_password, validate_password_strength
-    if role not in ROLES:
-        sys.exit(f"Unknown role. Choose one of: {', '.join(ROLES)}")
-    Base.metadata.create_all(engine)
+    from .security import validate_password_strength
     password = getpass.getpass("Password: ")
     if password != getpass.getpass("Repeat password: "):
         sys.exit("Passwords do not match")
@@ -52,12 +52,55 @@ def create_user(email: str, full_name: str, role: str) -> None:
         validate_password_strength(password)
     except HTTPException as e:
         sys.exit(e.detail)
+    return password
+
+
+def create_org(slug: str, name: str, country: str = "", currency: str = "EUR", language: str = "en") -> None:
+    """Create a customer organization (never a demo organization)."""
+    from .models import Organization
+    init_db()
     with SessionLocal() as db:
-        if db.scalar(select(User).where(User.email == email.lower())):
-            sys.exit("User already exists")
-        db.add(User(email=email.lower(), full_name=full_name, role=role, hashed_password=hash_password(password)))
+        set_tenant(db, SYSTEM)
+        if db.scalar(select(Organization).where(Organization.slug == slug)):
+            sys.exit("Organization slug already exists")
+        db.add(Organization(slug=slug, name=name, country=country or None, currency=currency.upper(),
+                            primary_language=language, is_demo=False, settings={}))
         db.commit()
-    print(f"Created {role} {email}")
+    print(f"Created organization {slug}")
+
+
+def create_user(email: str, full_name: str, role: str, org_slug: str = "") -> None:
+    """Create (or attach) a user. ROLE 'platform_admin' creates a platform operator without
+    tenant access; any other role requires an organization slug."""
+    from .models import Membership, Organization
+    from .security import hash_password
+    if role != "platform_admin" and role not in ROLES:
+        sys.exit(f"Unknown role. Choose one of: platform_admin, {', '.join(ROLES)}")
+    if role != "platform_admin" and not org_slug:
+        sys.exit("An organization slug is required for organization roles")
+    init_db()
+    with SessionLocal() as db:
+        set_tenant(db, SYSTEM)
+        org = None
+        if org_slug:
+            org = db.scalar(select(Organization).where(Organization.slug == org_slug))
+            if org is None:
+                sys.exit("Unknown organization")
+        user = db.scalar(select(User).where(User.email == email.lower()))
+        if user is None:
+            user = User(email=email.lower(), full_name=full_name, hashed_password=hash_password(_prompt_password()),
+                        is_platform_admin=role == "platform_admin")
+            db.add(user)
+            db.flush()
+        elif role == "platform_admin":
+            user.is_platform_admin = True
+        if org is not None:
+            if db.scalar(select(Membership).where(Membership.user_id == user.id,
+                                                  Membership.organization_id == org.id)):
+                sys.exit("User is already a member of this organization")
+            db.add(Membership(user_id=user.id, organization_id=org.id, role=role))
+        db.commit()
+    print(f"OK: {email} {role} {org_slug}")
 
 
 def schema_sql() -> None:
@@ -71,7 +114,7 @@ def schema_sql() -> None:
 
 
 def main(argv: list[str]) -> None:
-    cmds = {"bootstrap": bootstrap, "init-db": init_db, "seed-demo": seed_demo, "create-user": create_user, "schema-sql": schema_sql}
+    cmds = {"bootstrap": bootstrap, "init-db": init_db, "create-org": create_org, "seed-demo": seed_demo, "create-user": create_user, "schema-sql": schema_sql}
     if not argv or argv[0] not in cmds:
         sys.exit(__doc__)
     cmds[argv[0]](*argv[1:])

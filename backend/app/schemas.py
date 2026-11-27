@@ -150,9 +150,9 @@ class PlayerBase(BaseModel):
     preferred_foot: Foot | None = None
     physical_profile: str | None = None
     contract_expiry: date | None = None
-    estimated_fee_eur: int | None = Field(default=None, ge=0)
+    estimated_fee: int | None = Field(default=None, ge=0)
     fee_estimate_source: str | None = None
-    salary_expectation_eur: int | None = Field(default=None, ge=0)
+    salary_expectation: int | None = Field(default=None, ge=0)
     availability: Availability = "unknown"
     agent_name: str | None = None
     notes: str | None = None
@@ -179,9 +179,9 @@ class PlayerUpdate(BaseModel):
     preferred_foot: Foot | None = None
     physical_profile: str | None = None
     contract_expiry: date | None = None
-    estimated_fee_eur: int | None = Field(default=None, ge=0)
+    estimated_fee: int | None = Field(default=None, ge=0)
     fee_estimate_source: str | None = None
-    salary_expectation_eur: int | None = Field(default=None, ge=0)
+    salary_expectation: int | None = Field(default=None, ge=0)
     availability: Availability | None = None
     agent_name: str | None = None
     notes: str | None = None
@@ -459,8 +459,8 @@ class PipelineEventOut(ORM):
 
 class BudgetIn(BaseModel):
     season: str
-    transfer_budget_eur: int = Field(ge=0)
-    wage_budget_eur: int | None = Field(default=None, ge=0)
+    transfer_budget: int = Field(ge=0)
+    wage_budget: int | None = Field(default=None, ge=0)
     notes: str | None = None
 
 

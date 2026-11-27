@@ -150,5 +150,5 @@ def test_dashboard(client, H):
     d = client.get("/api/dashboard", headers=H["sporting_director"]).json()
     assert d["players"]["total"] >= 96 and d["players"]["fictional"] >= 96
     assert set(d["pipeline"]["by_stage"]) >= {"identified", "signed", "rejected"}
-    assert d["budget"]["transfer_budget_eur"] == 6_000_000
+    assert d["budget"]["transfer_budget"] == 6_000_000
     assert len(d["activity"]["weekly"]) == 12

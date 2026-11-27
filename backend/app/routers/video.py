@@ -14,7 +14,7 @@ from .. import audit
 from ..database import get_db
 from ..models import MatchReport, MatchVideo, Player, User, VideoObservation
 from ..schemas import MatchReportIn, ObservationIn, ObservationOut, VideoIn, VideoOut
-from ..security import has_permission, require
+from ..security import Ctx, has_permission, require
 from ..serializers import match_report_out
 
 router = APIRouter(prefix="/api", tags=["video & match reports"])
@@ -37,7 +37,7 @@ def _video_out(v: MatchVideo) -> dict:
 
 
 @router.get("/videos")
-def list_videos(player_id: int | None = None, _: User = Depends(require("players:read")), db: Session = Depends(get_db)):
+def list_videos(player_id: int | None = None, _: Ctx = Depends(require("players:read")), db: Session = Depends(get_db)):
     q = select(MatchVideo).options(selectinload(MatchVideo.observations), selectinload(MatchVideo.player)) \
         .order_by(MatchVideo.match_date.desc().nulls_last(), MatchVideo.id.desc())
     if player_id:
@@ -46,7 +46,7 @@ def list_videos(player_id: int | None = None, _: User = Depends(require("players
 
 
 @router.post("/videos", status_code=201, summary="Register a link to licensed footage")
-def create_video(body: VideoIn, request: Request, user: User = Depends(require("video:write")),
+def create_video(body: VideoIn, request: Request, user: Ctx = Depends(require("video:write")),
                  db: Session = Depends(get_db)):
     if db.get(Player, body.player_id) is None:
         raise HTTPException(404, "Player not found")
@@ -60,12 +60,12 @@ def create_video(body: VideoIn, request: Request, user: User = Depends(require("
 
 
 @router.get("/videos/{video_id}")
-def get_video(video_id: int, _: User = Depends(require("players:read")), db: Session = Depends(get_db)):
+def get_video(video_id: int, _: Ctx = Depends(require("players:read")), db: Session = Depends(get_db)):
     return _video_out(_video(db, video_id))
 
 
 @router.delete("/videos/{video_id}", status_code=204)
-def delete_video(video_id: int, request: Request, user: User = Depends(require("video:write")),
+def delete_video(video_id: int, request: Request, user: Ctx = Depends(require("video:write")),
                  db: Session = Depends(get_db)):
     v = _video(db, video_id)
     audit.log(db, user, "video.delete", "match_video", v.id, {"player_id": v.player_id}, request)
@@ -74,7 +74,7 @@ def delete_video(video_id: int, request: Request, user: User = Depends(require("
 
 
 @router.post("/videos/{video_id}/observations", status_code=201, response_model=ObservationOut)
-def add_observation(video_id: int, body: ObservationIn, request: Request, user: User = Depends(require("video:write")),
+def add_observation(video_id: int, body: ObservationIn, request: Request, user: Ctx = Depends(require("video:write")),
                     db: Session = Depends(get_db)):
     v = _video(db, video_id)
     if v.duration_minutes and body.timestamp_seconds > v.duration_minutes * 60:
@@ -88,7 +88,7 @@ def add_observation(video_id: int, body: ObservationIn, request: Request, user: 
 
 
 @router.delete("/videos/{video_id}/observations/{obs_id}", status_code=204)
-def delete_observation(video_id: int, obs_id: int, request: Request, user: User = Depends(require("video:write")),
+def delete_observation(video_id: int, obs_id: int, request: Request, user: Ctx = Depends(require("video:write")),
                        db: Session = Depends(get_db)):
     obs = db.get(VideoObservation, obs_id)
     if obs is None or obs.video_id != video_id:
@@ -103,7 +103,7 @@ def delete_observation(video_id: int, obs_id: int, request: Request, user: User 
 # --------------------------------------------------------------------------- match reports
 @router.get("/match-reports")
 def list_match_reports(player_id: int | None = None, scout_id: int | None = None,
-                       _: User = Depends(require("players:read")), db: Session = Depends(get_db)):
+                       _: Ctx = Depends(require("players:read")), db: Session = Depends(get_db)):
     q = select(MatchReport).options(selectinload(MatchReport.scout)).order_by(MatchReport.created_at.desc())
     if player_id:
         q = q.where(MatchReport.player_id == player_id)
@@ -113,7 +113,7 @@ def list_match_reports(player_id: int | None = None, scout_id: int | None = None
 
 
 @router.post("/match-reports", status_code=201, summary="Save an individual match report (video or live)")
-def create_match_report(body: MatchReportIn, request: Request, user: User = Depends(require("match_reports:write")),
+def create_match_report(body: MatchReportIn, request: Request, user: Ctx = Depends(require("match_reports:write")),
                         db: Session = Depends(get_db)):
     if db.get(Player, body.player_id) is None:
         raise HTTPException(404, "Player not found")
@@ -136,7 +136,7 @@ def create_match_report(body: MatchReportIn, request: Request, user: User = Depe
 
 
 @router.get("/match-reports/{report_id}")
-def get_match_report(report_id: int, _: User = Depends(require("players:read")), db: Session = Depends(get_db)):
+def get_match_report(report_id: int, _: Ctx = Depends(require("players:read")), db: Session = Depends(get_db)):
     r = db.get(MatchReport, report_id)
     if r is None:
         raise HTTPException(404, "Match report not found")

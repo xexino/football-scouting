@@ -76,10 +76,10 @@ def test_analytics_output(client, H, make_player, real_source):
 
 def test_csv_export(client, H):
     r = client.get("/api/players/export.csv", headers=H["video_scout"])
-    assert r.status_code == 200 and r.text.startswith("id,full_name")
+    assert r.status_code == 200 and r.text.startswith("id,scope,full_name")
     # fee column present but empty for a role without financial access
     header, first = r.text.splitlines()[:2]
-    idx = header.split(",").index("estimated_fee_eur")
+    idx = header.split(",").index("estimated_fee")
     assert first.split(",")[idx] == ""
 
 

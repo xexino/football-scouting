@@ -37,7 +37,9 @@ EMAILS = {
 @pytest.fixture(scope="session")
 def client():
     Base.metadata.drop_all(engine)
-    with TestClient(app) as c:
+    with engine.begin() as conn:
+        conn.exec_driver_sql("DROP TABLE IF EXISTS alembic_version")
+    with TestClient(app) as c:  # startup runs migrations (PostgreSQL) and seeds the demo org
         yield c
 
 
@@ -70,7 +72,7 @@ def make_player(client, tokens, real_source):
     def _make(**kw):
         body = {"full_name": f"Test Player {uuid.uuid4().hex[:8]}", "nationality": "Morocco",
                 "primary_position": "CM", "date_of_birth": "2001-03-04", "data_source_id": real_source["id"],
-                "estimated_fee_eur": 500000, "salary_expectation_eur": 90000, **kw}
+                "estimated_fee": 500000, "salary_expectation": 90000, **kw}
         r = client.post("/api/players", headers=tokens["head_of_scouting"], json=body)
         assert r.status_code == 201, r.text
         return r.json()

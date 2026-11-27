@@ -14,9 +14,15 @@
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
   const can = p => !!S.user && S.user.permissions.includes(p);
+  const setToken = t => { S.token = t; try { sessionStorage.setItem('rsi_token', t); } catch (_) { } };
   const saveCompare = () => { try { sessionStorage.setItem('rsi_compare', JSON.stringify([...S.compare])); } catch (_) { } };
 
-  const fmtMoney = v => v == null ? '—' : v >= 1e6 ? `€${(v / 1e6).toFixed(v >= 1e7 ? 0 : 2).replace(/\.?0+$/, '')}M` : v >= 1e3 ? `€${Math.round(v / 1e3)}k` : `€${v}`;
+  const currency = () => (S.user && S.user.organization && S.user.organization.currency) || 'EUR';
+  const fmtMoney = v => {
+    if (v == null) return '—';
+    try { return new Intl.NumberFormat('en', { style: 'currency', currency: currency(), notation: 'compact', maximumFractionDigits: 2 }).format(v); }
+    catch (_) { return `${v} ${currency()}`; }
+  };
   const fmtDate = v => v ? new Date(v).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
   const fmtDateTime = v => v ? new Date(v).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
   const fmtNum = (v, d = 2) => v == null ? '—' : (Number.isInteger(v) ? String(v) : Number(v).toFixed(d));
@@ -198,7 +204,7 @@
   function changePassword() {
     modal('Change password', h`<div class="field"><label>Current password</label><input type="password" name="current_password" required autocomplete="current-password"></div>
       <div class="field"><label>New password (≥10 chars, letters and digits)</label><input type="password" name="new_password" required autocomplete="new-password"></div>`,
-      { onSubmit: async f => { await api('/api/auth/change-password', { method: 'POST', body: formData(f) }); toast('Password changed'); } });
+      { onSubmit: async f => { const r = await api('/api/auth/change-password', { method: 'POST', body: formData(f) }); setToken(r.access_token); toast('Password changed — other sessions were signed out'); } });
   }
 
   function logout() {
@@ -224,8 +230,8 @@
         const res = await fetch('/api/auth/token', { method: 'POST', body: fd });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Login failed');
-        S.token = data.access_token; S.user = data.user;
-        try { sessionStorage.setItem('rsi_token', S.token); } catch (_) { }
+        setToken(data.access_token);
+        S.user = await api('/api/auth/me');
         S.meta = await api('/api/meta');
         location.hash = '#/dashboard';
       } catch (err) { toast(err.message, true); }
@@ -239,7 +245,7 @@
     const P = d.players, PL = d.pipeline, A = d.activity, B = d.budget;
     const posLabels = S.meta.positions;
     const listTable = (rows, empty) => rows.length ? h`<div class="table-wrap"><table><thead><tr><th>Player</th><th>Pos</th><th>Age</th><th>Club</th><th>Stage</th><th>Priority</th>${can('financials:read') ? h`<th class="num">Est. fee</th>` : ''}</tr></thead><tbody>
-      ${rows.map(r => h`<tr class="clickable" data-href="#/players/${r.player_id}"><td>${r.player_name} ${fictBadge(r.is_fictional)}</td><td>${posBadge(r.position)}</td><td>${r.age ?? '—'}</td><td class="muted">${r.club || '—'}</td><td>${stageBadge(r.stage)}</td><td>${prioBadge(r.priority)}</td>${can('financials:read') ? h`<td class="num">${fmtMoney(r.estimated_fee_eur)}</td>` : ''}</tr>`)}
+      ${rows.map(r => h`<tr class="clickable" data-href="#/players/${r.player_id}"><td>${r.player_name} ${fictBadge(r.is_fictional)}</td><td>${posBadge(r.position)}</td><td>${r.age ?? '—'}</td><td class="muted">${r.club || '—'}</td><td>${stageBadge(r.stage)}</td><td>${prioBadge(r.priority)}</td>${can('financials:read') ? h`<td class="num">${fmtMoney(r.estimated_fee)}</td>` : ''}</tr>`)}
       </tbody></table></div>` : h`<div class="empty">${empty}</div>`;
     const content = h`
       ${P.fictional ? h`<div class="fict-banner"><strong>Demonstration mode:</strong> ${P.fictional} of ${P.total} players are FICTIONAL sample records. Import licensed data to begin real recruitment work.</div>` : ''}
@@ -253,9 +259,9 @@
         <div class="card span2"><div class="card-head"><h3>Recruitment funnel</h3><a href="#/pipeline" class="btn sm">Open pipeline</a></div>
           ${hbars(S.meta.pipeline_stages.map(s => [label(s), PL.by_stage[s] || 0]), {})}</div>
         <div class="card"><div class="card-head"><h3>Recruitment budget ${B?.season ? h`<span class="muted">${B.season}</span>` : ''}</h3></div>
-          ${B ? (B.transfer_budget_eur != null ? h`
-            <div class="kv"><dt>Transfer budget</dt><dd><strong>${fmtMoney(B.transfer_budget_eur)}</strong></dd><dt>Committed (signed)</dt><dd>${fmtMoney(B.committed_eur)}</dd><dt>Pending (approved / negotiating)</dt><dd>${fmtMoney(B.pending_eur)}</dd><dt>Remaining</dt><dd style="color:${B.remaining_eur < 0 ? 'var(--red)' : 'var(--gold)'}"><strong>${fmtMoney(B.remaining_eur)}</strong></dd><dt>Shortlist value</dt><dd>${fmtMoney(B.shortlist_value_eur)}</dd><dt>Wage budget</dt><dd>${fmtMoney(B.wage_budget_eur)}</dd></div>
-            <div class="bar-track" style="margin-top:14px;height:10px"><div class="bar-fill gold" style="width:${Math.min(100, ((B.committed_eur + B.pending_eur) / Math.max(1, B.transfer_budget_eur)) * 100)}%"></div></div>
+          ${B ? (B.transfer_budget != null ? h`
+            <div class="kv"><dt>Transfer budget</dt><dd><strong>${fmtMoney(B.transfer_budget)}</strong></dd><dt>Committed (signed)</dt><dd>${fmtMoney(B.committed)}</dd><dt>Pending (approved / negotiating)</dt><dd>${fmtMoney(B.pending)}</dd><dt>Remaining</dt><dd style="color:${B.remaining < 0 ? 'var(--red)' : 'var(--gold)'}"><strong>${fmtMoney(B.remaining)}</strong></dd><dt>Shortlist value</dt><dd>${fmtMoney(B.shortlist_value)}</dd><dt>Wage budget</dt><dd>${fmtMoney(B.wage_budget)}</dd></div>
+            <div class="bar-track" style="margin-top:14px;height:10px"><div class="bar-fill gold" style="width:${Math.min(100, ((B.committed + B.pending) / Math.max(1, B.transfer_budget)) * 100)}%"></div></div>
             <p class="faint" style="font-size:11.5px">${B.note}</p>` : h`<div class="empty">No budget set. ${can('budget:manage') ? h`<a href="#/admin">Set budget</a>` : ''}</div>`) : h`<div class="empty">Financial information is restricted for your role.</div>`}
         </div>
       </div>
@@ -309,7 +315,7 @@
           <div class="field"><label>Height max (cm)</label><input name="height_max" type="number" value="${p.height_max || ''}"></div>
           <div class="field"><label>Preferred foot</label><select name="foot"><option value="">Any</option>${M.feet.map(f => opt(f, label(f), p.foot === f))}</select></div>
           <div class="field"><label>Contract expires before</label><input name="contract_expiry_before" type="date" value="${p.contract_expiry_before || ''}"></div>
-          ${can('financials:read') ? h`<div class="field"><label>Max est. fee (€)</label><input name="fee_max" type="number" step="50000" value="${p.fee_max || ''}"></div><div class="field"><label>Max salary (€/yr)</label><input name="salary_max" type="number" step="10000" value="${p.salary_max || ''}"></div>` : ''}
+          ${can('financials:read') ? h`<div class="field"><label>Max est. fee (${currency()})</label><input name="fee_max" type="number" step="50000" value="${p.fee_max || ''}"></div><div class="field"><label>Max salary (${currency()}/yr)</label><input name="salary_max" type="number" step="10000" value="${p.salary_max || ''}"></div>` : ''}
           <div class="field"><label>Availability</label><select name="availability"><option value="">Any</option>${M.availability.map(a => opt(a, label(a), p.availability === a))}</select></div>
           <div class="field"><label>Pipeline</label><select name="pipeline_stage"><option value="">Any</option>${opt('none', 'Not in pipeline', p.pipeline_stage === 'none')}${M.pipeline_stages.map(s => opt(s, label(s), p.pipeline_stage === s))}</select></div>
           <div class="field"><label>Min minutes (latest season)</label><input name="min_minutes" type="number" step="90" value="${p.min_minutes || ''}"></div>
@@ -365,7 +371,7 @@
             <td><strong>${r.full_name}</strong> ${fictBadge(r.is_fictional)}<div class="faint" style="font-size:11.5px">${r.tactical_role || ''}</div></td>
             <td>${posBadge(r.primary_position)} <span class="faint">${(r.secondary_positions || []).join(' ')}</span></td><td>${r.age ?? '—'}</td><td>${r.nationality}</td>
             <td>${r.club_name || '—'}<div class="faint" style="font-size:11.5px">${r.league_name || ''}</div></td><td class="num">${r.height_cm ?? '—'}</td><td>${label(r.preferred_foot)}</td>
-            <td>${fmtDate(r.contract_expiry)}</td>${fin ? h`<td class="num">${fmtMoney(r.estimated_fee_eur)}</td>` : ''}<td>${availBadge(r.availability)}</td>
+            <td>${fmtDate(r.contract_expiry)}</td>${fin ? h`<td class="num">${fmtMoney(r.estimated_fee)}</td>` : ''}<td>${availBadge(r.availability)}</td>
             <td class="num">${r.latest_minutes ?? '—'}</td>${statKeys.map(k => h`<td class="num">${fmtNum(r.matched_metrics?.[k])}</td>`)}<td>${stageBadge(r.pipeline_stage)}</td><td class="faint">${fmtDate(r.last_updated)}</td></tr>`)}
           </tbody></table></div>
           <div class="pager"><span class="muted">Page ${p.page} / ${pages}</span><button class="btn sm" id="prev" ${p.page <= 1 ? raw('disabled') : ''}>‹ Prev</button><button class="btn sm" id="next" ${p.page >= pages ? raw('disabled') : ''}>Next ›</button></div>`
@@ -398,7 +404,7 @@
         <div class="field"><label>Physical characteristics (scout notes)</label><textarea name="physical_profile">${p.physical_profile || ''}</textarea></div></fieldset>
       <fieldset><legend>Contract & market</legend><div class="form-grid">${inp('contract_expiry', 'Contract expiry', 'date')}
         <div class="field"><label>Availability</label>${sel('availability', M.availability.map(a => [a, label(a)]), p.availability, false)}</div>
-        ${fin ? h`${inp('estimated_fee_eur', 'Estimated fee (€)', 'number', 'min=0 step=10000')}${inp('fee_estimate_source', 'Fee estimate source')}${inp('salary_expectation_eur', 'Salary expectation (€ / year gross)', 'number', 'min=0 step=1000')}${inp('agent_name', 'Agent / representative')}` : h`<p class="muted">Financial fields are restricted for your role.</p>`}</div></fieldset>
+        ${fin ? h`${inp('estimated_fee', `Estimated fee (${currency()})`, 'number', 'min=0 step=10000')}${inp('fee_estimate_source', 'Fee estimate source')}${inp('salary_expectation', `Salary expectation (${currency()} / year gross)`, 'number', 'min=0 step=1000')}${inp('agent_name', 'Agent / representative')}` : h`<p class="muted">Financial fields are restricted for your role.</p>`}</div></fieldset>
       <fieldset><legend>Provenance</legend><div class="form-grid">
         <div class="field"><label>Data source</label>${sel('data_source_id', sources.map(s => [s.id, s.name + (s.is_fictional ? ' (fictional)' : '')]), p.data_source_id)}</div>${inp('source_reference', 'Source reference / ID')}</div>
         <div class="field"><label>Notes</label><textarea name="notes">${p.notes || ''}</textarea></div></fieldset>
@@ -408,7 +414,7 @@
       e.preventDefault();
       const body = formData(e.target);
       ['current_club_id', 'data_source_id'].forEach(k => { if (body[k] != null) body[k] = Number(body[k]); });
-      if (!fin) ['estimated_fee_eur', 'fee_estimate_source', 'salary_expectation_eur', 'agent_name'].forEach(k => delete body[k]);
+      if (!fin) ['estimated_fee', 'fee_estimate_source', 'salary_expectation', 'agent_name'].forEach(k => delete body[k]);
       try {
         const res = id ? await api(`/api/players/${id}`, { method: 'PATCH', body }) : await api('/api/players', { method: 'POST', body: clean(body) });
         toast(id ? 'Player updated' : 'Player created'); location.hash = `#/players/${res.id}`;
@@ -480,7 +486,7 @@
       <div class="card"><h3>Physical</h3><dl class="kv"><dt>Height</dt><dd>${p.height_cm ? p.height_cm + ' cm' : '—'}</dd><dt>Weight</dt><dd>${p.weight_kg ? p.weight_kg + ' kg' : '—'}</dd><dt>Preferred foot</dt><dd>${label(p.preferred_foot)}</dd></dl>
         <h4 style="margin-top:12px">Physical characteristics</h4><p>${p.physical_profile || h`<span class="faint">No scout notes recorded.</span>`}</p></div>
       <div class="card"><h3>Contract & market</h3><dl class="kv"><dt>Contract expiry</dt><dd>${fmtDate(p.contract_expiry)}</dd><dt>Availability</dt><dd>${availBadge(p.availability)}</dd>
-        ${fin ? h`<dt>Estimated fee</dt><dd><strong style="color:var(--gold)">${fmtMoney(p.estimated_fee_eur)}</strong></dd><dt>Fee source</dt><dd class="muted">${p.fee_estimate_source || '—'}</dd><dt>Salary expectation</dt><dd>${fmtMoney(p.salary_expectation_eur)} / yr</dd><dt>Representative</dt><dd>${p.agent_name || '—'}</dd>` : h`<dt>Financials</dt><dd class="muted">Restricted for your role</dd>`}</dl></div>
+        ${fin ? h`<dt>Estimated fee</dt><dd><strong style="color:var(--gold)">${fmtMoney(p.estimated_fee)}</strong></dd><dt>Fee source</dt><dd class="muted">${p.fee_estimate_source || '—'}</dd><dt>Salary expectation</dt><dd>${fmtMoney(p.salary_expectation)} / yr</dd><dt>Representative</dt><dd>${p.agent_name || '—'}</dd>` : h`<dt>Financials</dt><dd class="muted">Restricted for your role</dd>`}</dl></div>
       <div class="card span2"><h3>Season statistics (raw totals)</h3>${statsTable(p)}</div>
       <div class="card"><h3>Data provenance</h3><dl class="kv"><dt>Profile source</dt><dd>${p.data_source || h`<span class="badge b-red">No source</span>`}</dd><dt>Reference</dt><dd>${p.source_reference || '—'}</dd><dt>Last updated</dt><dd>${fmtDateTime(p.last_updated)}</dd><dt>Created</dt><dd>${fmtDateTime(p.created_at)}</dd></dl>
         ${p.notes ? h`<h4 style="margin-top:12px">Notes</h4><p>${p.notes}</p>` : ''}</div></div>`.s;
@@ -691,7 +697,7 @@
           <div><span class="badge b-green">+</span> ${x.strengths.length ? x.strengths.join(' · ') : h`<span class="faint">none ≥70th pct</span>`}</div><div><span class="badge b-red">−</span> ${x.weaknesses.length ? x.weaknesses.join(' · ') : h`<span class="faint">none ≤30th pct</span>`}</div></div>`)}
           <p class="faint" style="font-size:12px">${P[0].strengths_weaknesses_basis}</p></div>
         <div class="card"><h3>Financial profile</h3>${P[0].financial.redacted ? h`<p class="muted">Fee and salary restricted for your role.</p>` : ''}<div class="table-wrap"><table><thead><tr><th></th>${P.map(x => h`<th>${x.player.full_name}</th>`)}</tr></thead><tbody>
-          ${P[0].financial.redacted ? '' : h`<tr><td class="muted">Est. fee</td>${P.map(x => h`<td>${fmtMoney(x.financial.estimated_fee_eur)}</td>`)}</tr><tr><td class="muted">Salary / yr</td>${P.map(x => h`<td>${fmtMoney(x.financial.salary_expectation_eur)}</td>`)}</tr>`}
+          ${P[0].financial.redacted ? '' : h`<tr><td class="muted">Est. fee</td>${P.map(x => h`<td>${fmtMoney(x.financial.estimated_fee)}</td>`)}</tr><tr><td class="muted">Salary / yr</td>${P.map(x => h`<td>${fmtMoney(x.financial.salary_expectation)}</td>`)}</tr>`}
           <tr><td class="muted">Contract</td>${P.map(x => h`<td>${fmtDate(x.financial.contract_expiry)} <span class="faint">${x.financial.months_remaining != null ? x.financial.months_remaining + ' mo' : ''}</span></td>`)}</tr><tr><td class="muted">Availability</td>${P.map(x => h`<td>${availBadge(x.financial.availability)}</td>`)}</tr></tbody></table></div>
           <h3 style="margin-top:16px">Scouting assessments <span class="badge b-blue">SCOUT OPINION</span></h3><div class="table-wrap"><table><thead><tr><th></th>${P.map(x => h`<th>${x.player.full_name}</th>`)}</tr></thead><tbody>
           <tr><td class="muted">Match reports</td>${P.map(x => h`<td>${x.scouting.match_reports} <span class="faint">(${x.scouting.full_match_or_live_reports} full/live, ${x.scouting.highlights_only_reports} highlights)</span></td>`)}</tr>
@@ -716,7 +722,7 @@
         <label class="check"><input type="checkbox" id="f-me" ${f.assigned_to_me ? raw('checked') : ''}> Assigned to me</label><span style="flex:1"></span><span class="muted">${board.total} players · click a card to record a decision</span></div>
       <div class="board">${board.stages.map(s => h`<div class="col ${s}"><div class="col-head">${label(s)}<span class="count">${board.columns[s].length}</span></div><div class="col-body">
         ${board.columns[s].map(e => h`<div class="pcard prio-${e.priority}" data-id="${e.id}"><div class="nm">${e.player_name}</div><div class="row" style="gap:6px">${posBadge(e.position)} <span class="muted">${e.age ?? '?'} · ${e.nationality}</span></div>
-          <div class="faint" style="margin-top:4px">${e.club || '—'}</div><div class="row" style="gap:6px;margin-top:6px">${prioBadge(e.priority)} ${fictBadge(e.is_fictional)} ${e.estimated_fee_eur != null ? h`<span class="badge b-gold">${fmtMoney(e.estimated_fee_eur)}</span>` : ''}</div>
+          <div class="faint" style="margin-top:4px">${e.club || '—'}</div><div class="row" style="gap:6px;margin-top:6px">${prioBadge(e.priority)} ${fictBadge(e.is_fictional)} ${e.estimated_fee != null ? h`<span class="badge b-gold">${fmtMoney(e.estimated_fee)}</span>` : ''}</div>
           ${e.assigned_scout_name ? h`<div class="faint" style="margin-top:4px;font-size:11.5px">👤 ${e.assigned_scout_name}</div>` : ''}</div>`)}
         ${board.columns[s].length ? '' : h`<div class="faint" style="text-align:center;padding:16px;font-size:12px">Empty</div>`}</div></div>`)}</div>
       <div class="card" style="margin-top:16px"><h3>Latest decisions</h3><ul class="timeline">${events.map(ev => h`<li><div><a href="#/players/${ev.player_id}">${ev.player_name}</a>: ${ev.from_stage ? h`${stageBadge(ev.from_stage)} → ` : ''}${stageBadge(ev.to_stage)}</div><div style="margin:3px 0">${ev.note || ''}</div><div class="when">${ev.user_name || '—'} · ${fmtDateTime(ev.created_at)}</div></li>`)}</ul></div>`);
@@ -843,7 +849,7 @@
     shell('admin', 'Administration', h`<div class="grid g2">
       ${users ? h`<div class="card span2" style="grid-column:1/-1"><div class="card-head"><h3>Users</h3><button class="btn sm primary" id="new-user">+ New user</button></div><div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Region</th><th>Status</th><th>Last login</th><th></th></tr></thead><tbody>
         ${users.map(u => h`<tr><td>${u.full_name}</td><td class="muted">${u.email}</td><td>${M.roles[u.role]}</td><td>${u.region || '—'}</td><td>${u.is_active ? h`<span class="badge b-green">active</span>` : h`<span class="badge b-red">disabled</span>`}</td><td class="faint">${fmtDateTime(u.last_login_at)}</td><td><button class="btn sm edit-user" data-id="${u.id}">Edit</button></td></tr>`)}</tbody></table></div></div>` : ''}
-      ${budgets ? h`<div class="card"><div class="card-head"><h3>Recruitment budgets</h3>${can('budget:manage') ? h`<button class="btn sm" id="budget">Set budget</button>` : ''}</div><div class="table-wrap"><table><thead><tr><th>Season</th><th class="num">Transfer</th><th class="num">Wages</th><th>Notes</th></tr></thead><tbody>${budgets.map(b => h`<tr><td>${b.season}</td><td class="num">${fmtMoney(b.transfer_budget_eur)}</td><td class="num">${fmtMoney(b.wage_budget_eur)}</td><td class="muted">${b.notes || ''}</td></tr>`)}</tbody></table></div></div>` : ''}
+      ${budgets ? h`<div class="card"><div class="card-head"><h3>Recruitment budgets</h3>${can('budget:manage') ? h`<button class="btn sm" id="budget">Set budget</button>` : ''}</div><div class="table-wrap"><table><thead><tr><th>Season</th><th class="num">Transfer</th><th class="num">Wages</th><th>Notes</th></tr></thead><tbody>${budgets.map(b => h`<tr><td>${b.season}</td><td class="num">${fmtMoney(b.transfer_budget)}</td><td class="num">${fmtMoney(b.wage_budget)}</td><td class="muted">${b.notes || ''}</td></tr>`)}</tbody></table></div></div>` : ''}
       <div class="card"><h3>Backup & export</h3><p class="muted">Logical JSON export of all tables (password hashes excluded). For full database backups use <code>scripts/backup.sh</code> (pg_dump) — see docs/DEPLOYMENT.md.</p>
         <div class="row">${can('backup:run') ? h`<button class="btn primary" id="exp">Download full export (JSON)</button>` : ''}<button class="btn" id="exp-csv">Players CSV</button></div></div>
       <div class="card span2" style="grid-column:1/-1"><h3>Role permissions</h3><div class="table-wrap"><table><thead><tr><th>Permission</th>${roles.map(r => h`<th>${r.label}</th>`)}</tr></thead><tbody>
@@ -853,7 +859,7 @@
     </div>`);
     if ($('#exp')) $('#exp').onclick = () => download('/api/admin/export', `raja_scout_export_${new Date().toISOString().slice(0, 10)}.json`);
     $('#exp-csv').onclick = () => download('/api/players/export.csv', 'raja_players.csv');
-    if ($('#budget')) $('#budget').onclick = () => modal('Set recruitment budget', h`<div class="field"><label>Season *</label><input name="season" required placeholder="2026-27"></div><div class="field"><label>Transfer budget (€) *</label><input name="transfer_budget_eur" type="number" min="0" required></div><div class="field"><label>Wage budget (€ / yr)</label><input name="wage_budget_eur" type="number" min="0"></div><div class="field"><label>Notes</label><textarea name="notes"></textarea></div>`,
+    if ($('#budget')) $('#budget').onclick = () => modal('Set recruitment budget', h`<div class="field"><label>Season *</label><input name="season" required placeholder="2026-27"></div><div class="field"><label>Transfer budget (${currency()}) *</label><input name="transfer_budget" type="number" min="0" required></div><div class="field"><label>Wage budget (${currency()} / yr)</label><input name="wage_budget" type="number" min="0"></div><div class="field"><label>Notes</label><textarea name="notes"></textarea></div>`,
       { onSubmit: async f => { await api('/api/budgets', { method: 'PUT', body: clean(formData(f)) }); toast('Budget saved'); adminView(); } });
     const userForm = u => modal(u ? `Edit ${u.full_name}` : 'New user', h`<div class="form-grid">${u ? '' : h`<div class="field"><label>Email *</label><input name="email" type="email" required></div>`}
       <div class="field"><label>Full name *</label><input name="full_name" value="${u?.full_name || ''}" required></div><div class="field"><label>Role *</label><select name="role">${Object.entries(M.roles).map(([k, t]) => h`<option value="${k}" ${u?.role === k ? raw('selected') : ''}>${t}</option>`)}</select></div>

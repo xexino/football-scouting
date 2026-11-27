@@ -25,7 +25,7 @@ from ..models import (
     User,
 )
 from ..schemas import ClubIn, ClubOut, DataSourceIn, DataSourceOut, LeagueIn, LeagueOut
-from ..security import ROLE_LABELS, get_current_user, require
+from ..security import Ctx, ROLE_LABELS, get_current_user, require
 
 router = APIRouter(prefix="/api", tags=["reference"])
 
@@ -55,12 +55,12 @@ def meta(_: User = Depends(get_current_user)):
 
 
 @router.get("/leagues", response_model=list[LeagueOut])
-def leagues(_: User = Depends(require("players:read")), db: Session = Depends(get_db)):
+def leagues(_: Ctx = Depends(require("players:read")), db: Session = Depends(get_db)):
     return db.scalars(select(League).order_by(League.country, League.name)).all()
 
 
 @router.post("/leagues", response_model=LeagueOut, status_code=201)
-def create_league(body: LeagueIn, request: Request, user: User = Depends(require("players:write")),
+def create_league(body: LeagueIn, request: Request, user: Ctx = Depends(require("players:write")),
                   db: Session = Depends(get_db)):
     if db.scalar(select(League).where(League.name == body.name, League.country == body.country)):
         raise HTTPException(409, "League already exists")
@@ -73,7 +73,7 @@ def create_league(body: LeagueIn, request: Request, user: User = Depends(require
 
 
 @router.patch("/leagues/{league_id}", response_model=LeagueOut)
-def update_league(league_id: int, body: LeagueIn, request: Request, user: User = Depends(require("stats:write")),
+def update_league(league_id: int, body: LeagueIn, request: Request, user: Ctx = Depends(require("stats:write")),
                   db: Session = Depends(get_db)):
     league = db.get(League, league_id)
     if league is None:
@@ -86,7 +86,7 @@ def update_league(league_id: int, body: LeagueIn, request: Request, user: User =
 
 
 @router.get("/clubs", response_model=list[ClubOut])
-def clubs(league_id: int | None = None, _: User = Depends(require("players:read")), db: Session = Depends(get_db)):
+def clubs(league_id: int | None = None, _: Ctx = Depends(require("players:read")), db: Session = Depends(get_db)):
     q = select(Club).order_by(Club.name)
     if league_id:
         q = q.where(Club.league_id == league_id)
@@ -94,7 +94,7 @@ def clubs(league_id: int | None = None, _: User = Depends(require("players:read"
 
 
 @router.post("/clubs", response_model=ClubOut, status_code=201)
-def create_club(body: ClubIn, request: Request, user: User = Depends(require("players:write")),
+def create_club(body: ClubIn, request: Request, user: Ctx = Depends(require("players:write")),
                 db: Session = Depends(get_db)):
     if db.scalar(select(Club).where(Club.name == body.name, Club.country == body.country)):
         raise HTTPException(409, "Club already exists")
@@ -107,12 +107,12 @@ def create_club(body: ClubIn, request: Request, user: User = Depends(require("pl
 
 
 @router.get("/data-sources", response_model=list[DataSourceOut])
-def data_sources(_: User = Depends(require("players:read")), db: Session = Depends(get_db)):
+def data_sources(_: Ctx = Depends(require("players:read")), db: Session = Depends(get_db)):
     return db.scalars(select(DataSource).order_by(DataSource.name)).all()
 
 
 @router.post("/data-sources", response_model=DataSourceOut, status_code=201)
-def create_data_source(body: DataSourceIn, request: Request, user: User = Depends(require("players:write")),
+def create_data_source(body: DataSourceIn, request: Request, user: Ctx = Depends(require("players:write")),
                        db: Session = Depends(get_db)):
     if db.scalar(select(DataSource).where(DataSource.name == body.name)):
         raise HTTPException(409, "Data source already exists")

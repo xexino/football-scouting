@@ -18,7 +18,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, object_session, selectinload
+
+from ..assessments import get_assessment
 
 from .. import audit
 from ..analytics import age_on
@@ -34,7 +36,7 @@ from ..models import (
     User,
 )
 from ..schemas import PipelineCreate, PipelineMove, PipelineUpdate
-from ..security import has_permission, require
+from ..security import Ctx, has_permission, require
 
 router = APIRouter(prefix="/api/pipeline", tags=["recruitment pipeline"])
 
@@ -55,6 +57,7 @@ def _entry(db: Session, entry_id: int) -> PipelineEntry:
 def entry_out(e: PipelineEntry, viewer: User, with_history: bool = False) -> dict:
     p = e.player
     can_fin = has_permission(viewer, "financials:read")
+    assessment = get_assessment(object_session(e), p.id)
     out = {
         "id": e.id,
         "player_id": p.id,
@@ -65,7 +68,8 @@ def entry_out(e: PipelineEntry, viewer: User, with_history: bool = False) -> dic
         "club": p.club.name if p.club else None,
         "league": p.club.league.name if p.club and p.club.league else None,
         "is_fictional": p.is_fictional,
-        "estimated_fee_eur": p.estimated_fee_eur if can_fin else None,
+        "estimated_fee": (assessment.estimated_fee if assessment else None) if can_fin else None,
+        "currency": viewer.organization.currency,
         "contract_expiry": p.contract_expiry,
         "stage": e.stage,
         "priority": e.priority,
@@ -130,7 +134,7 @@ def check_transition(db: Session, user: User, e: PipelineEntry, to: str) -> list
 
 @router.get("", summary="Pipeline board grouped by stage")
 def board(priority: str | None = None, position: str | None = None, assigned_to_me: bool = False,
-          user: User = Depends(require("pipeline:read")), db: Session = Depends(get_db)):
+          user: Ctx = Depends(require("pipeline:read")), db: Session = Depends(get_db)):
     q = select(PipelineEntry).options(
         selectinload(PipelineEntry.player).selectinload(Player.club).selectinload(Club.league),
         selectinload(PipelineEntry.assigned_scout))
@@ -149,7 +153,7 @@ def board(priority: str | None = None, position: str | None = None, assigned_to_
 
 
 @router.post("", status_code=201, summary="Add a player to the pipeline (stage: Identified)")
-def add(body: PipelineCreate, request: Request, user: User = Depends(require("pipeline:move")),
+def add(body: PipelineCreate, request: Request, user: Ctx = Depends(require("pipeline:move")),
         db: Session = Depends(get_db)):
     p = db.get(Player, body.player_id)
     if p is None:
@@ -171,7 +175,7 @@ def add(body: PipelineCreate, request: Request, user: User = Depends(require("pi
 
 
 @router.get("/events", summary="Recent decisions across the pipeline")
-def recent_events(limit: int = 50, user: User = Depends(require("pipeline:read")), db: Session = Depends(get_db)):
+def recent_events(limit: int = 50, user: Ctx = Depends(require("pipeline:read")), db: Session = Depends(get_db)):
     evs = db.scalars(select(PipelineEvent).options(
         selectinload(PipelineEvent.user), selectinload(PipelineEvent.entry).selectinload(PipelineEntry.player))
         .order_by(PipelineEvent.created_at.desc(), PipelineEvent.id.desc()).limit(min(limit, 500))).all()
@@ -182,7 +186,7 @@ def recent_events(limit: int = 50, user: User = Depends(require("pipeline:read")
 
 
 @router.get("/player/{player_id}")
-def by_player(player_id: int, user: User = Depends(require("pipeline:read")), db: Session = Depends(get_db)):
+def by_player(player_id: int, user: Ctx = Depends(require("pipeline:read")), db: Session = Depends(get_db)):
     e = db.scalar(select(PipelineEntry).where(PipelineEntry.player_id == player_id))
     if e is None:
         return None
@@ -190,12 +194,12 @@ def by_player(player_id: int, user: User = Depends(require("pipeline:read")), db
 
 
 @router.get("/{entry_id}")
-def get_entry(entry_id: int, user: User = Depends(require("pipeline:read")), db: Session = Depends(get_db)):
+def get_entry(entry_id: int, user: Ctx = Depends(require("pipeline:read")), db: Session = Depends(get_db)):
     return entry_out(_entry(db, entry_id), user, with_history=True)
 
 
 @router.post("/{entry_id}/move", summary="Move a player to another stage (rationale required)")
-def move(entry_id: int, body: PipelineMove, request: Request, user: User = Depends(require("pipeline:move")),
+def move(entry_id: int, body: PipelineMove, request: Request, user: Ctx = Depends(require("pipeline:move")),
          db: Session = Depends(get_db)):
     e = _entry(db, entry_id)
     extra = check_transition(db, user, e, body.to_stage)
@@ -211,7 +215,7 @@ def move(entry_id: int, body: PipelineMove, request: Request, user: User = Depen
 
 
 @router.patch("/{entry_id}")
-def update(entry_id: int, body: PipelineUpdate, request: Request, user: User = Depends(require("pipeline:move")),
+def update(entry_id: int, body: PipelineUpdate, request: Request, user: Ctx = Depends(require("pipeline:move")),
            db: Session = Depends(get_db)):
     e = _entry(db, entry_id)
     changes = body.model_dump(exclude_unset=True)

@@ -9,9 +9,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from ..analytics import POSITION_PROFILES, TACTICAL_ROLES, age_on, analyse_player, role_fit, strengths_weaknesses
+from ..assessments import get_assessments
 from ..database import get_db
 from ..models import Club, MatchReport, PipelineEntry, Player, PlayerSeasonStats, ScoutingReport, User
-from ..security import has_permission, require
+from ..security import Ctx, has_permission, require
 
 router = APIRouter(prefix="/api/compare", tags=["comparison"])
 
@@ -31,7 +32,7 @@ def _months_until(d: date | None) -> int | None:
 
 
 @router.post("", summary="Compare 2–5 players")
-def compare(body: CompareIn, user: User = Depends(require("players:read")), db: Session = Depends(get_db)):
+def compare(body: CompareIn, user: Ctx = Depends(require("players:read")), db: Session = Depends(get_db)):
     if len(set(body.player_ids)) != len(body.player_ids):
         raise HTTPException(422, "Duplicate players in comparison")
     players = db.scalars(select(Player).where(Player.id.in_(body.player_ids)).options(
@@ -55,8 +56,10 @@ def compare(body: CompareIn, user: User = Depends(require("players:read")), db: 
     role_key = body.tactical_role or next((k for k, r in TACTICAL_ROLES.items() if r["position"] == position), None)
 
     can_fin = has_permission(user, "financials:read")
+    assess = get_assessments(db, [p.id for p in players])
     results = []
     for p in players:
+        a_ = assess.get(p.id)
         a = analyse_player(db, p, body.season)
         pm = {m["key"]: m for m in a.get("profile_metrics", [])}
         pcts = {k: {"percentile": m.get("percentile")} for k, m in pm.items()}
@@ -93,11 +96,12 @@ def compare(body: CompareIn, user: User = Depends(require("players:read")), db: 
             "strengths_weaknesses_basis": "data-derived: ≥70th / ≤30th percentile vs. database position pool",
             "tactical_suitability": role_fit(pcts, role_key) if role_key else None,
             "financial": {
-                "estimated_fee_eur": p.estimated_fee_eur if can_fin else None,
-                "salary_expectation_eur": p.salary_expectation_eur if can_fin else None,
+                "estimated_fee": (a_.estimated_fee if a_ else None) if can_fin else None,
+                "salary_expectation": (a_.salary_expectation if a_ else None) if can_fin else None,
+                "currency": user.organization.currency,
                 "contract_expiry": p.contract_expiry,
                 "months_remaining": _months_until(p.contract_expiry),
-                "availability": p.availability,
+                "availability": a_.availability if a_ else "unknown",
                 "redacted": not can_fin,
             },
             "scouting": {

@@ -11,7 +11,7 @@ from ..database import get_db
 from ..models import Club, Player, PlayerSeasonStats, ScoutingReport, User
 from ..report_generator import generate_report, report_to_markdown
 from ..schemas import ReportGenerateIn, ReportUpdate
-from ..security import has_permission, require
+from ..security import Ctx, has_permission, require
 from ..serializers import report_out
 
 router = APIRouter(prefix="/api/reports", tags=["scouting reports"])
@@ -39,7 +39,7 @@ def _report(db: Session, report_id: int) -> ScoutingReport:
 
 
 @router.get("")
-def list_reports(player_id: int | None = None, _: User = Depends(require("players:read")), db: Session = Depends(get_db)):
+def list_reports(player_id: int | None = None, _: Ctx = Depends(require("players:read")), db: Session = Depends(get_db)):
     q = select(ScoutingReport).options(selectinload(ScoutingReport.author), selectinload(ScoutingReport.player)) \
         .order_by(ScoutingReport.updated_at.desc())
     if player_id:
@@ -53,7 +53,7 @@ def list_reports(player_id: int | None = None, _: User = Depends(require("player
 
 
 @router.post("/generate", status_code=201, summary="Draft a report from platform evidence (evidence-tagged)")
-def generate(body: ReportGenerateIn, request: Request, user: User = Depends(require("reports:write")),
+def generate(body: ReportGenerateIn, request: Request, user: Ctx = Depends(require("reports:write")),
              db: Session = Depends(get_db)):
     p = _player(db, body.player_id)
     draft = generate_report(db, p, body.season, body.tactical_role)
@@ -67,12 +67,12 @@ def generate(body: ReportGenerateIn, request: Request, user: User = Depends(requ
 
 
 @router.get("/{report_id}")
-def get_report(report_id: int, _: User = Depends(require("players:read")), db: Session = Depends(get_db)):
+def get_report(report_id: int, _: Ctx = Depends(require("players:read")), db: Session = Depends(get_db)):
     return report_out(_report(db, report_id))
 
 
 @router.get("/{report_id}/export.md", response_class=PlainTextResponse, summary="Export report as Markdown")
-def export_report(report_id: int, request: Request, user: User = Depends(require("players:read")),
+def export_report(report_id: int, request: Request, user: Ctx = Depends(require("players:read")),
                   db: Session = Depends(get_db)):
     r = _report(db, report_id)
     audit.log(db, user, "report.export", "scouting_report", r.id, None, request)
@@ -96,7 +96,7 @@ def _validate_sections(sections: dict) -> None:
 
 
 @router.patch("/{report_id}")
-def update_report(report_id: int, body: ReportUpdate, request: Request, user: User = Depends(require("reports:write")),
+def update_report(report_id: int, body: ReportUpdate, request: Request, user: Ctx = Depends(require("reports:write")),
                   db: Session = Depends(get_db)):
     r = _report(db, report_id)
     if r.status == "final":
@@ -121,7 +121,7 @@ def update_report(report_id: int, body: ReportUpdate, request: Request, user: Us
 
 
 @router.post("/{report_id}/finalize", summary="Lock a report (requires recommendation)")
-def finalize(report_id: int, request: Request, user: User = Depends(require("reports:finalize")),
+def finalize(report_id: int, request: Request, user: Ctx = Depends(require("reports:finalize")),
              db: Session = Depends(get_db)):
     r = _report(db, report_id)
     if r.status == "final":
@@ -137,7 +137,7 @@ def finalize(report_id: int, request: Request, user: User = Depends(require("rep
 
 
 @router.delete("/{report_id}", status_code=204)
-def delete_report(report_id: int, request: Request, user: User = Depends(require("reports:write")),
+def delete_report(report_id: int, request: Request, user: Ctx = Depends(require("reports:write")),
                   db: Session = Depends(get_db)):
     r = _report(db, report_id)
     if r.status == "final" and not has_permission(user, "users:manage"):

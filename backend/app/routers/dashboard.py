@@ -24,7 +24,8 @@ from ..models import (
     VideoObservation,
 )
 from ..schemas import BudgetIn
-from ..security import has_permission, require
+from ..security import Ctx, has_permission, require
+from ..assessments import get_assessments
 from .pipeline import entry_out
 
 router = APIRouter(prefix="/api", tags=["dashboard"])
@@ -35,7 +36,7 @@ def _aware(dt: datetime) -> datetime:
 
 
 @router.get("/dashboard", summary="Executive dashboard summary")
-def dashboard(user: User = Depends(require("players:read")), db: Session = Depends(get_db)):
+def dashboard(user: Ctx = Depends(require("players:read")), db: Session = Depends(get_db)):
     now = datetime.now(timezone.utc)
     players = db.scalars(select(Player).options(selectinload(Player.club).selectinload(Club.league))).all()
     entries = db.scalars(select(PipelineEntry).options(
@@ -85,6 +86,8 @@ def dashboard(user: User = Depends(require("players:read")), db: Session = Depen
     out = {
         "players": {
             "total": len(players),
+            "own": sum(p.organization_id is not None for p in players),
+            "shared": sum(p.organization_id is None for p in players),
             "fictional": sum(p.is_fictional for p in players),
             "real": sum(not p.is_fictional for p in players),
             "stale_records": sum(1 for p in players if _aware(p.last_updated) < stale_cutoff),
@@ -121,17 +124,20 @@ def dashboard(user: User = Depends(require("players:read")), db: Session = Depen
     }
     if has_permission(user, "financials:read"):
         budget = db.scalar(select(RecruitmentBudget).order_by(RecruitmentBudget.season.desc()))
-        signed = sum(e.player.estimated_fee_eur or 0 for e in entries if e.stage == "signed")
-        pending = sum(e.player.estimated_fee_eur or 0 for e in entries if e.stage in ("approved", "negotiation"))
-        shortlisted_val = sum(e.player.estimated_fee_eur or 0 for e in entries if e.stage in ("shortlisted", "live_scouting"))
+        assess = get_assessments(db)
+        fee = lambda e: (assess[e.player_id].estimated_fee or 0) if e.player_id in assess else 0  # noqa: E731
+        signed = sum(fee(e) for e in entries if e.stage == "signed")
+        pending = sum(fee(e) for e in entries if e.stage in ("approved", "negotiation"))
+        shortlisted_val = sum(fee(e) for e in entries if e.stage in ("shortlisted", "live_scouting"))
         out["budget"] = {
             "season": budget.season if budget else None,
-            "transfer_budget_eur": budget.transfer_budget_eur if budget else None,
-            "wage_budget_eur": budget.wage_budget_eur if budget else None,
-            "committed_eur": signed,
-            "pending_eur": pending,
-            "shortlist_value_eur": shortlisted_val,
-            "remaining_eur": (budget.transfer_budget_eur - signed - pending) if budget else None,
+            "currency": user.organization.currency,
+            "transfer_budget": budget.transfer_budget if budget else None,
+            "wage_budget": budget.wage_budget if budget else None,
+            "committed": signed,
+            "pending": pending,
+            "shortlist_value": shortlisted_val,
+            "remaining": (budget.transfer_budget - signed - pending) if budget else None,
             "note": "Committed/pending use estimated fees on player records — estimates, not agreed prices.",
         }
     return out
@@ -141,14 +147,14 @@ ORDER_IDX = {s: i for i, s in enumerate(PIPELINE_STAGES)}
 
 
 @router.get("/budgets")
-def list_budgets(_: User = Depends(require("financials:read")), db: Session = Depends(get_db)):
-    return [{"id": b.id, "season": b.season, "transfer_budget_eur": b.transfer_budget_eur,
-             "wage_budget_eur": b.wage_budget_eur, "notes": b.notes, "updated_at": b.updated_at}
+def list_budgets(ctx: Ctx = Depends(require("financials:read")), db: Session = Depends(get_db)):
+    return [{"id": b.id, "season": b.season, "transfer_budget": b.transfer_budget, "currency": ctx.organization.currency,
+             "wage_budget": b.wage_budget, "notes": b.notes, "updated_at": b.updated_at}
             for b in db.scalars(select(RecruitmentBudget).order_by(RecruitmentBudget.season.desc())).all()]
 
 
 @router.put("/budgets", summary="Create or update the budget for a season")
-def upsert_budget(body: BudgetIn, request: Request, user: User = Depends(require("budget:manage")),
+def upsert_budget(body: BudgetIn, request: Request, user: Ctx = Depends(require("budget:manage")),
                   db: Session = Depends(get_db)):
     b = db.scalar(select(RecruitmentBudget).where(RecruitmentBudget.season == body.season))
     if b is None:

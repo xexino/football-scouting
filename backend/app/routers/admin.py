@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
@@ -10,9 +10,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import audit
-from ..database import Base, get_db
+from ..database import get_db
 from ..models import AuditLog, User
-from ..security import require
+from ..security import Ctx, require
 
 router = APIRouter(prefix="/api/admin", tags=["administration"])
 
@@ -20,7 +20,7 @@ router = APIRouter(prefix="/api/admin", tags=["administration"])
 @router.get("/audit-logs")
 def audit_logs(action: str | None = None, entity_type: str | None = None, user_id: int | None = None,
                limit: int = Query(100, le=1000), offset: int = 0,
-               _: User = Depends(require("audit:read")), db: Session = Depends(get_db)):
+               _: Ctx = Depends(require("audit:read")), db: Session = Depends(get_db)):
     q = select(AuditLog).order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
     if action:
         q = q.where(AuditLog.action.like(f"{action}%"))
@@ -40,17 +40,13 @@ def _default(o):
     raise TypeError(type(o))
 
 
-@router.get("/export", summary="Full logical backup as JSON (password hashes excluded)")
-def export_all(request: Request, user: User = Depends(require("backup:run")), db: Session = Depends(get_db)):
-    dump: dict = {"exported_at": datetime.now(timezone.utc).isoformat(), "format": "raja-scout-export-v1", "tables": {}}
-    for table in Base.metadata.sorted_tables:
-        rows = [dict(r._mapping) for r in db.execute(table.select()).all()]
-        if table.name == "users":
-            for r in rows:
-                r.pop("hashed_password", None)
-        dump["tables"][table.name] = rows
-    audit.log(db, user, "admin.export", None, None, {"tables": len(dump["tables"])}, request)
+@router.get("/export", summary="Export all of this organization's data as JSON (password hashes excluded)")
+def export_all(request: Request, ctx: Ctx = Depends(require("backup:run")), db: Session = Depends(get_db)):
+    from ..exporting import export_organization
+    dump = export_organization(db, ctx.organization)
+    audit.log(db, ctx, "organization.export", "organization", ctx.organization_id,
+              {"tables": {k: len(v) for k, v in dump["tables"].items()}}, request)
     db.commit()
     body = json.dumps(dump, default=_default, ensure_ascii=False, indent=1)
     return Response(body, media_type="application/json", headers={
-        "Content-Disposition": f"attachment; filename=raja_scout_export_{date.today().isoformat()}.json"})
+        "Content-Disposition": f"attachment; filename={ctx.organization.slug}_export_{date.today().isoformat()}.json"})
