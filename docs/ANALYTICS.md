@@ -26,7 +26,7 @@ For each position, the reference pool is every player in the database whose prim
 position matches and who has ≥ `MIN_MINUTES_POOL` minutes in the season analysed.
 Percentile = `(below + ½ equal) / n × 100`, inverted for lower-is-better metrics (fouls,
 goals conceded). Pools under 5 give no percentile; pools under 20 are flagged as coarse.
-The pool reflects **who Raja has chosen to track**, not world football.
+The pool reflects **who the organization has chosen to track** (plus shared reference players), not world football.
 
 ## Position profiles
 

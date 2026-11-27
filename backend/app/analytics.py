@@ -98,7 +98,7 @@ POSITION_PROFILES: dict[str, list[str]] = {
 }
 
 # Tactical role templates used for model-based role fit. Weights express which data
-# indicators are relevant to the role in Raja's game model — they are a hypothesis set
+# indicators are relevant to the role in a club's game model — they are a hypothesis set
 # by the technical staff, not a quality verdict.
 TACTICAL_ROLES: dict[str, dict] = {
     "ball_playing_cb": {"label": "Ball-playing centre-back", "position": "CB",
@@ -268,7 +268,7 @@ def role_fit(percentiles: dict[str, dict], role_key: str) -> dict | None:
         "data_coverage_pct": coverage,
         "metrics_used": covered,
         "evidence_type": "model_estimate",
-        "note": "Weighted average of database percentiles for the indicators Raja's game model associates with this role. A screening aid, not a quality rating.",
+        "note": "Weighted average of database percentiles for the indicators the club's game model associates with this role. A screening aid, not a quality rating.",
     }
 
 

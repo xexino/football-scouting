@@ -15,7 +15,7 @@ from sqlalchemy import text
 from .config import settings
 from .database import Base, SessionLocal, engine
 from .tenancy import TenantContextMissing, TenantViolation
-from .routers import admin, auth, compare, dashboard, imports, pipeline, players, reference, reports, users, video
+from .routers import admin, auth, compare, dashboard, imports, organization, pipeline, players, reference, reports, users, video
 
 logger = logging.getLogger("raja_scout")
 FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
@@ -45,7 +45,8 @@ app = FastAPI(
     title="Raja Scout Intelligence API",
     version="1.0.0",
     description=(
-        "Recruitment intelligence platform for Raja Club Athletic. "
+        "Raja Scout Intelligence — multi-tenant football recruitment intelligence platform (SaaS). "
+        "Independent software; not affiliated with or endorsed by Raja Club Athletic. "
         "Authenticate via `POST /api/auth/token`, then send `Authorization: Bearer <token>`. "
         "All statistics carry provenance; fictional sample data is flagged `is_fictional`."
     ),
@@ -78,7 +79,7 @@ async def _tenant_missing(request, exc):
     return JSONResponse({"detail": "Internal authorization error"}, status_code=500)
 
 
-for r in (auth, users, reference, players, compare, video, reports, pipeline, dashboard, imports, admin):
+for r in (auth, organization, users, reference, players, compare, video, reports, pipeline, dashboard, imports, admin):
     app.include_router(r.router)
 
 

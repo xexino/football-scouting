@@ -63,7 +63,8 @@ def _avg_rating(reports: list[MatchReport], field: str) -> dict | None:
                  source="Aggregated match reports")
 
 
-def generate_report(db: Session, player: Player, season: str | None = None, tactical_role: str | None = None) -> dict:
+def generate_report(db: Session, player: Player, season: str | None = None, tactical_role: str | None = None,
+                    org=None) -> dict:
     a = analyse_player(db, player, season)
     assessment = get_assessment(db, player.id)  # this organization's private view only
     availability = assessment.availability if assessment else "unknown"
@@ -221,7 +222,8 @@ def generate_report(db: Session, player: Player, season: str | None = None, tact
     if player.contract_expiry and (player.contract_expiry - date.today()).days < 365:
         risk_flags.append("contract expires within 12 months (opportunity, but competition for signature)")
     if a.get("has_data") and not any(m.get("league_adjusted") is not None for m in a["profile_metrics"]):
-        risk_flags.append("league strength unadjusted — output may not translate to Botola Pro")
+        home = (getattr(org, "settings", None) or {}).get("home_league") or "your league"
+        risk_flags.append(f"league strength unadjusted — output may not translate to {home}")
     level = "high" if len(risk_flags) >= 3 else "medium" if risk_flags else "low"
     pr = [_item("model_estimate", f"Evidence-risk indicator: {level.upper()}. Flags: "
                 + ("; ".join(risk_flags) if risk_flags else "none") + ".", kind="risk")]
@@ -262,9 +264,11 @@ def generate_report(db: Session, player: Player, season: str | None = None, tact
     return {"sections": sections, "risk_level": level}
 
 
-def report_to_markdown(report, player: Player) -> str:
+def report_to_markdown(report, player: Player, org=None) -> str:
     s = report.sections
     lines = [f"# {report.title}", ""]
+    if org is not None:
+        lines += [f"**{org.name}** — confidential recruitment document", ""]
     if player.is_fictional:
         lines += ["> **FICTIONAL SAMPLE DATA — demonstration only.**", ""]
     lines += [f"Status: **{report.status}** · Recommendation: **{report.recommendation or 'not set'}** · "
@@ -281,4 +285,8 @@ def report_to_markdown(report, player: Player) -> str:
         lines.append("")
     lines += ["---", "Legend: DATA = verified source data · SCOUT = scout opinion · MODEL = platform calculation · "
               "FICTIONAL = demo data · NO EVIDENCE / INPUT REQUIRED = gaps to close before decision."]
+    footer = ((org.settings or {}).get("report_footer") if org is not None else None)
+    if footer:
+        lines += ["", footer]
+    lines += ["", "_Generated with Raja Scout Intelligence (independent software)._"]
     return "\n".join(lines)

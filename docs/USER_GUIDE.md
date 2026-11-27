@@ -60,7 +60,7 @@ stage) — see the *Pipeline history* tab and the dashboard.
   ≥450 minutes — the pool is shown. With fewer than 5 players no percentile is given.
 * **League-adjusted** values only appear when the competition has a documented strength
   coefficient. They are approximations.
-* **Role fit** is a weighted average of percentiles for indicators linked to a role in Raja's
+* **Role fit** is a weighted average of percentiles for indicators linked to a role in the club's
   game model. It is a screening aid, not a rating.
 * Numbers describe *what a player did* in his team's context. They do not prove quality —
   always combine them with full-match video and live viewing.
@@ -69,7 +69,7 @@ See [ANALYTICS.md](ANALYTICS.md) for formulas.
 
 ## Video scouting rules
 
-* Only link footage Raja is licensed or authorised to view. The platform stores links,
+* Only link footage your organization is licensed or authorised to view. The platform stores links,
   never files.
 * Highlight packages are always flagged and reports based on them display
   “Based on highlights only — not equivalent to complete match analysis”. They cannot be

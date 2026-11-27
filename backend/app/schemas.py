@@ -288,7 +288,7 @@ class VideoIn(BaseModel):
     @classmethod
     def _confirmed(cls, v: bool) -> bool:
         if not v:
-            raise ValueError("You must confirm Raja holds a licence or authorisation to view this footage")
+            raise ValueError("You must confirm your organization holds a licence or authorisation to view this footage")
         return v
 
     @field_validator("is_full_match")

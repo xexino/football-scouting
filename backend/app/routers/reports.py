@@ -56,7 +56,7 @@ def list_reports(player_id: int | None = None, _: Ctx = Depends(require("players
 def generate(body: ReportGenerateIn, request: Request, user: Ctx = Depends(require("reports:write")),
              db: Session = Depends(get_db)):
     p = _player(db, body.player_id)
-    draft = generate_report(db, p, body.season, body.tactical_role)
+    draft = generate_report(db, p, body.season, body.tactical_role, org=user.organization)
     r = ScoutingReport(player_id=p.id, author_id=user.id, title=f"Scouting report — {p.full_name}",
                        sections=draft["sections"], risk_level=draft["risk_level"], auto_generated=True)
     db.add(r)
@@ -77,7 +77,7 @@ def export_report(report_id: int, request: Request, user: Ctx = Depends(require(
     r = _report(db, report_id)
     audit.log(db, user, "report.export", "scouting_report", r.id, None, request)
     db.commit()
-    return PlainTextResponse(report_to_markdown(r, r.player), headers={
+    return PlainTextResponse(report_to_markdown(r, r.player, user.organization), headers={
         "Content-Disposition": f"attachment; filename=report_{r.id}.md"})
 
 

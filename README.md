@@ -1,10 +1,16 @@
 # Raja Scout Intelligence
 
-A football scouting and recruitment-intelligence platform built for **Raja Club Athletic**
-(Casablanca). It gives the club an independent, evidence-based international recruitment
-capability: a central player database, position-specific analytics, comparison, licensed
-video scouting, evidence-tagged scouting reports and a governed recruitment pipeline with
-full decision history.
+A multi-tenant **B2B SaaS** platform for football scouting and recruitment intelligence,
+built for clubs in North Africa first and then wider Africa. Each customer organization
+gets an isolated workspace: player database, position-specific analytics, comparison,
+licensed video scouting, evidence-tagged scouting reports and a governed recruitment
+pipeline with full decision history.
+
+> **Independence notice.** Raja Scout Intelligence is independent software owned by its
+> founder. It is not affiliated with, endorsed or sponsored by Raja Club Athletic or by any
+> club using it. Customer clubs appear under their own name and logo.
+
+SaaS architecture and sprint records: [docs/saas/](docs/saas/).
 
 ## Access the app
 

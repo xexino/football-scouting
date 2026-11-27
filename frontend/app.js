@@ -164,7 +164,9 @@
   const pctCell = p => p == null ? h`<span class="faint">n/a</span>` : h`<div class="pct-cell"><div class="bar-track"><div class="bar-fill ${p >= 70 ? 'gold' : ''}" style="width:${p}%"></div></div><span>${Math.round(p)}</span></div>`;
 
   // ------------------------------------------------------------------ shell
+  const NOT_AFFILIATED = 'Raja Scout Intelligence is independent software. It is not affiliated with, endorsed or sponsored by Raja Club Athletic or any club using it.';
   const ICONS = {
+    organization: '<path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/>',
     dashboard: '<path d="M3 13h8V3H3zm10 8h8V11h-8zM3 21h8v-6H3zm10-18v6h8V3z"/>',
     players: '<path d="M16 11c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 3-1.34 3-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5C15 14.17 10.33 13 8 13zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>',
     compare: '<path d="M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h5v2h2V1h-2zm0 15H5l5-6zm9-15h-5v2h5v13l-5-6v9h5a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z"/>',
@@ -177,25 +179,51 @@
   const NAV = [
     ['dashboard', 'Dashboard', 'players:read'], ['players', 'Player database', 'players:read'], ['compare', 'Comparison', 'players:read'],
     ['pipeline', 'Recruitment pipeline', 'pipeline:read'], ['video', 'Video scouting', 'players:read'], ['reports', 'Scouting reports', 'players:read'],
-    ['import', 'Data import', 'import:run'], ['admin', 'Administration', null],
+    ['import', 'Data import', 'import:run'], ['organization', 'Organization', 'org:manage'], ['admin', 'Administration', null],
   ];
-  const shield = '<svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><path d="M32 4 56 12v18c0 15-10 26-24 30C18 56 8 45 8 30V12z" fill="#006b3f" stroke="#d4af37" stroke-width="2.5"/><path d="M32 10 50 16v14c0 11-7 19.5-18 23-11-3.5-18-12-18-23V16z" fill="none" stroke="#fff" stroke-opacity=".5" stroke-width="1.2"/><text x="32" y="41" font-size="21" text-anchor="middle" fill="#fff" font-family="Arial" font-weight="bold">R</text></svg>';
+  // Product mark: a neutral analytics glyph (radar chart). Deliberately NOT a club crest.
+  const shield = '<svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><rect x="3" y="3" width="58" height="58" rx="14" fill="#0e241a" stroke="#2c5c47" stroke-width="2"/><polygon points="32,12 50,25 44,47 20,47 14,25" fill="none" stroke="#5f8473" stroke-width="1.5"/><polygon points="32,19 45,27 39,41 24,43 20,28" fill="#00a05a" fill-opacity=".35" stroke="#00c26e" stroke-width="2"/><circle cx="32" cy="19" r="2.6" fill="#d4af37"/></svg>';
+
+  const initials = n => String(n || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('');
+  function orgBrand() {
+    const o = S.user.organization || {};
+    const logo = o.logo_data_url && /^data:image\/(png|jpeg|webp);base64,/.test(o.logo_data_url)
+      ? h`<img class="org-logo" src="${o.logo_data_url}" alt="">` : h`<div class="org-logo ph">${initials(o.short_name || o.name)}</div>`;
+    const orgs = S.user.organizations || [];
+    return h`<div class="brand">${logo}<div style="min-width:0"><div class="brand-name" title="${o.name}">${o.short_name || o.name}</div><div class="brand-sub">Raja Scout Intelligence</div></div></div>
+      ${orgs.length > 1 ? h`<div class="field" style="padding:0 6px"><label for="org-switch">Organization</label><select id="org-switch">${orgs.map(x => h`<option value="${x.id}" ${x.id === o.id ? raw('selected') : ''}>${x.name}${x.is_demo ? ' (demo)' : ''}</option>`)}</select></div>` : ''}`;
+  }
+  function applyBranding() {
+    const o = (S.user && S.user.organization) || {};
+    const accent = (o.settings || {}).accent_color;
+    document.documentElement.style.setProperty('--gold', /^#[0-9a-fA-F]{6}$/.test(accent || '') ? accent : '#d4af37');
+    document.documentElement.lang = o.primary_language || 'en';
+    document.title = o.name ? `${o.short_name || o.name} · Raja Scout Intelligence` : 'Raja Scout Intelligence';
+  }
+  async function switchOrganization(id) {
+    try {
+      const r = await api('/api/auth/switch-organization', { method: 'POST', body: { organization_id: id } });
+      setToken(r.access_token); S.user = await api('/api/auth/me'); S.compare.clear(); saveCompare(); refCache = null;
+      applyBranding(); location.hash = '#/dashboard'; route();
+    } catch (e) { toast(e.message, true); }
+  }
 
   function shell(active, title, content, actions = '') {
     const showAdmin = can('users:manage') || can('audit:read') || can('backup:run') || can('budget:manage');
     $('#app').innerHTML = h`<div class="shell">
       <aside class="sidebar" id="sidebar">
-        <div class="brand">${raw(shield)}<div><div class="brand-name">RAJA SCOUT</div><div class="brand-sub">Intelligence</div></div></div>
+        ${orgBrand()}
         <nav class="nav">${NAV.filter(([k, , p]) => k === 'admin' ? showAdmin : can(p)).map(([k, t]) => h`<a href="#/${k}" class="${active === k ? 'active' : ''}"><svg viewBox="0 0 24 24" fill="currentColor">${raw(ICONS[k])}</svg>${t}${k === 'compare' && S.compare.size ? h` <span class="badge b-gold">${S.compare.size}</span>` : ''}</a>`)}</nav>
         <div class="side-foot"><div class="who">${S.user.full_name}</div><div class="muted">${S.meta?.roles?.[S.user.role] || S.user.role}</div>
           <div class="row" style="margin-top:8px"><button class="btn sm" id="pw-btn">Password</button><button class="btn sm" id="logout-btn">Log out</button></div></div>
       </aside>
       <div class="main">
         <header class="topbar"><button class="btn sm menu-btn" id="menu-btn" aria-label="Menu">☰</button><div class="title">${title}</div><div class="spacer"></div>${actions}</header>
-        <main class="content" id="content">${content}</main>
+        <main class="content" id="content">${S.user.organization?.is_demo ? h`<div class="fict-banner"><strong>Demo organization.</strong> Everything here is fictional sample data. Never enter real club data in a demo environment.</div>` : ''}${content}</main>
       </div></div>`.s;
     $('#logout-btn').onclick = logout;
     $('#pw-btn').onclick = changePassword;
+    if ($('#org-switch')) $('#org-switch').onchange = e => switchOrganization(Number(e.target.value));
     $('#menu-btn').onclick = () => $('#sidebar').classList.toggle('open');
     $$('.nav a').forEach(a => a.addEventListener('click', () => $('#sidebar').classList.remove('open')));
   }
@@ -217,11 +245,12 @@
   // ------------------------------------------------------------------ login
   function loginView() {
     $('#app').innerHTML = h`<div class="login-wrap"><form class="login-card" id="login-form">
-      <div class="brand">${raw(shield)}<div class="brand-name" style="font-size:20px">RAJA SCOUT INTELLIGENCE</div><div class="brand-sub">Raja Club Athletic · Recruitment</div></div>
+      <div class="brand">${raw(shield)}<div class="brand-name" style="font-size:20px">RAJA SCOUT INTELLIGENCE</div><div class="brand-sub">Football recruitment intelligence</div></div>
       <div class="field"><label for="email">Email</label><input id="email" name="username" type="email" autocomplete="username" required></div>
       <div class="field"><label for="pw">Password</label><input id="pw" name="password" type="password" autocomplete="current-password" required></div>
       <button class="btn primary" style="width:100%" type="submit">Sign in</button>
       <p class="muted" style="font-size:12px;margin-top:16px">Demo accounts (fictional data): <code>director@raja-scout.local</code>, <code>head.scouting@…</code>, <code>analyst@…</code>, <code>video@…</code>, <code>scout.westafrica@…</code>, <code>admin@…</code> — password <code>RajaDemo2026!</code> unless changed by your administrator.</p>
+      <p class="faint" style="font-size:11px;margin-top:14px;text-align:center">${NOT_AFFILIATED}</p>
     </form></div>`.s;
     $('#login-form').onsubmit = async e => {
       e.preventDefault();
@@ -233,6 +262,7 @@
         setToken(data.access_token);
         S.user = await api('/api/auth/me');
         S.meta = await api('/api/meta');
+        applyBranding();
         location.hash = '#/dashboard';
       } catch (err) { toast(err.message, true); }
     };
@@ -337,7 +367,7 @@
     }
     $('#add-stat').onclick = () => $('#stat-rows').insertAdjacentHTML('beforeend', statRow(metricOpts).s);
     $('#reset').onclick = () => { searchState.params = { sort: 'full_name', order: 'asc', page: 1, page_size: 25 }; playersView(); };
-    $('#export-btn').onclick = () => download('/api/players/export.csv', 'raja_players.csv');
+    $('#export-btn').onclick = () => download('/api/players/export.csv', 'players.csv');
     $('#filters').onsubmit = e => {
       e.preventDefault();
       const f = e.target; const fd = formData(f);
@@ -551,7 +581,7 @@
   async function videoTab(el, p) {
     const vids = await api(`/api/videos?player_id=${p.id}`);
     el.innerHTML = h`<div class="row end" style="margin-bottom:12px">${can('video:write') ? h`<button class="btn primary" id="add-video">+ Link licensed footage</button>` : ''}</div>
-      ${vids.length ? vids.map(v => videoCard(v)) : h`<div class="empty">No footage linked. Only link footage Raja is licensed or authorised to view — the platform stores links, never video files.</div>`}`.s;
+      ${vids.length ? vids.map(v => videoCard(v)) : h`<div class="empty">No footage linked. Only link footage your organization is licensed or authorised to view — the platform stores links, never video files.</div>`}`.s;
     if ($('#add-video', el)) $('#add-video', el).onclick = () => videoForm(p.id, () => playerTab(p, null, 'video'));
     bindVideoCards(el, () => playerTab(p, null, 'video'));
   }
@@ -583,7 +613,7 @@
       <div class="form-grid"><div class="field"><label>Licence type *</label><select name="license_type" id="lic">${M.video_licenses.map(l => h`<option value="${l}">${label(l)}</option>`)}</select></div>
       <div class="field"><label>Rights holder *</label><input name="rights_holder" required></div><div class="field"><label>Duration (min)</label><input name="duration_minutes" type="number" min="1" max="200"></div></div>
       <label class="check"><input type="checkbox" name="is_full_match" id="full"> This is complete, unedited full-match footage</label>
-      <label class="check" style="margin-top:6px"><input type="checkbox" name="license_confirmed"> I confirm Raja holds a licence or authorisation to view this footage</label>
+      <label class="check" style="margin-top:6px"><input type="checkbox" name="license_confirmed"> I confirm my organization holds a licence or authorisation to view this footage</label>
       <div class="field" style="margin-top:10px"><label>Notes</label><textarea name="notes"></textarea></div>`,
       { onSubmit: async f => { const b = clean(formData(f)); b.is_full_match = !!b.is_full_match; b.license_confirmed = !!b.license_confirmed; await api('/api/videos', { method: 'POST', body: { player_id: playerId, ...b } }); toast('Footage linked'); after(); } });
     const sync = () => { const hl = $('#lic').value === 'highlights'; $('#full').disabled = hl; if (hl) $('#full').checked = false; };
@@ -809,7 +839,7 @@
     refCache = null;
     const { sources } = await refs();
     shell('import', 'Data import', h`
-      <div class="notice warn"><strong>Data governance:</strong> import only data Raja is licensed to use. Do not import scraped data or redistribute licensed provider data. Every import is linked to a registered data source and logged in the audit trail. Empty cells are stored as "not available", never zero.</div>
+      <div class="notice warn"><strong>Data governance:</strong> import only data your organization is licensed to use. Do not import scraped data or redistribute licensed provider data. Every import is linked to a registered data source and logged in the audit trail. Empty cells are stored as "not available", never zero.</div>
       <div class="grid g2" style="margin-top:14px">
         <div class="card"><h3>1 · Data sources</h3><div class="table-wrap"><table><thead><tr><th>Name</th><th>Type</th><th>Licence notes</th></tr></thead><tbody>${sources.map(s => h`<tr><td>${s.name} ${fictBadge(s.is_fictional)}</td><td class="muted">${label(s.source_type)}</td><td style="white-space:normal" class="faint">${s.license_notes || '—'}</td></tr>`)}</tbody></table></div>
           <div class="row end" style="margin-top:10px"><button class="btn sm" id="new-src">+ Register data source</button></div></div>
@@ -839,6 +869,49 @@
     };
   }
 
+  // ------------------------------------------------------------------ organization settings
+  async function organizationView() {
+    loading('organization', 'Organization');
+    const o = await api('/api/organization');
+    const st = o.settings || {};
+    const opt = (list, cur) => list.map(x => h`<option ${x === cur ? raw('selected') : ''}>${x}</option>`);
+    const langs = { en: 'English', fr: 'Français', ar: 'العربية' };
+    shell('organization', 'Organization', h`<div class="grid g2">
+      <form class="card" id="org-form"><h3>Identity</h3>
+        <div class="form-grid"><div class="field"><label>Organization name *</label><input name="name" value="${o.name}" required></div>
+        <div class="field"><label>Short name</label><input name="short_name" value="${o.short_name || ''}" maxlength="40"></div>
+        <div class="field"><label>Country</label><input name="country" value="${o.country || ''}"></div>
+        <div class="field"><label>Primary language</label><select name="primary_language">${o.options.languages.map(l => h`<option value="${l}" ${l === o.primary_language ? raw('selected') : ''}>${langs[l] || l}</option>`)}</select></div>
+        <div class="field"><label>Currency (fees, salaries, budgets)</label><select name="currency">${opt(o.options.currencies, o.currency)}</select></div>
+        <div class="field"><label>Timezone</label><input name="timezone" value="${o.timezone}" placeholder="Africa/Casablanca"></div></div>
+        <h3 style="margin-top:8px">Settings</h3>
+        <div class="form-grid"><div class="field"><label>Home league (used in report risk notes)</label><input name="home_league" value="${st.home_league || ''}" placeholder="e.g. Botola Pro"></div>
+        <div class="field"><label>Accent colour</label><input name="accent_color" type="color" value="${st.accent_color || '#d4af37'}" style="height:38px"></div></div>
+        <div class="field"><label>Report footer</label><textarea name="report_footer" maxlength="300">${st.report_footer || ''}</textarea></div>
+        <p class="faint" style="font-size:12px">Changing the currency does not convert existing amounts — they are reinterpreted in the new currency.</p>
+        <div class="row end"><button class="btn primary" type="submit">Save</button></div></form>
+      <div class="card"><h3>Logo</h3>
+        <div class="row" style="align-items:center;gap:16px;margin:8px 0 14px">${o.logo_data_url ? h`<img src="${o.logo_data_url}" alt="Logo" style="width:96px;height:96px;object-fit:contain;background:var(--bg-2);border:1px solid var(--border);border-radius:12px">` : h`<div class="org-logo ph" style="width:96px;height:96px;font-size:30px">${initials(o.short_name || o.name)}</div>`}
+          <div class="muted" style="font-size:12.5px">PNG, JPEG or WebP, max 256 KB.<br>SVG is not accepted for security reasons.</div></div>
+        <div class="row"><input type="file" id="logo-file" accept="image/png,image/jpeg,image/webp" style="flex:1"><button class="btn primary" id="logo-up">Upload</button>${o.logo_data_url ? h`<button class="btn danger" id="logo-del">Remove</button>` : ''}</div>
+        <h3 style="margin-top:22px">Workspace</h3><dl class="kv"><dt>Identifier</dt><dd><code>${o.slug}</code></dd><dt>Type</dt><dd>${o.is_demo ? h`<span class="badge b-amber">Demo (fictional data)</span>` : h`<span class="badge b-green">Customer</span>`}</dd><dt>Status</dt><dd>${label(o.status)}</dd></dl>
+        <p class="faint" style="font-size:11.5px;margin-top:14px">${NOT_AFFILIATED}</p></div></div>`);
+    const refreshMe = async () => { S.user = await api('/api/auth/me'); applyBranding(); organizationView(); };
+    $('#org-form').onsubmit = async e => {
+      e.preventDefault();
+      const f = formData(e.target);
+      const body = { name: f.name, short_name: f.short_name, country: f.country, primary_language: f.primary_language, currency: f.currency,
+        timezone: f.timezone, settings: { home_league: f.home_league || '', report_footer: f.report_footer || '', accent_color: f.accent_color === '#d4af37' ? '' : f.accent_color } };
+      try { await api('/api/organization', { method: 'PATCH', body }); toast('Organization updated'); refreshMe(); } catch (err) { toast(err.message, true); }
+    };
+    $('#logo-up').onclick = async () => {
+      const file = $('#logo-file').files[0]; if (!file) return toast('Choose an image first', true);
+      const fd = new FormData(); fd.append('file', file);
+      try { await api('/api/organization/logo', { method: 'POST', form: fd }); toast('Logo updated'); refreshMe(); } catch (err) { toast(err.message, true); }
+    };
+    if ($('#logo-del')) $('#logo-del').onclick = async () => { try { await api('/api/organization/logo', { method: 'DELETE' }); refreshMe(); } catch (err) { toast(err.message, true); } };
+  }
+
   // ------------------------------------------------------------------ admin
   async function adminView() {
     loading('admin', 'Administration');
@@ -858,7 +931,7 @@
         ${logs.map(l => h`<tr><td class="faint">${fmtDateTime(l.created_at)}</td><td>${l.user_email || '—'}</td><td><code>${l.action}</code></td><td class="muted">${l.entity_type || ''}${l.entity_id ? ' #' + l.entity_id : ''}</td><td style="white-space:normal;max-width:420px;font-size:12px" class="faint">${l.details ? JSON.stringify(l.details).slice(0, 220) : ''}</td><td class="faint">${l.ip_address || ''}</td></tr>`)}</tbody></table></div></div>` : ''}
     </div>`);
     if ($('#exp')) $('#exp').onclick = () => download('/api/admin/export', `raja_scout_export_${new Date().toISOString().slice(0, 10)}.json`);
-    $('#exp-csv').onclick = () => download('/api/players/export.csv', 'raja_players.csv');
+    $('#exp-csv').onclick = () => download('/api/players/export.csv', 'players.csv');
     if ($('#budget')) $('#budget').onclick = () => modal('Set recruitment budget', h`<div class="field"><label>Season *</label><input name="season" required placeholder="2026-27"></div><div class="field"><label>Transfer budget (${currency()}) *</label><input name="transfer_budget" type="number" min="0" required></div><div class="field"><label>Wage budget (${currency()} / yr)</label><input name="wage_budget" type="number" min="0"></div><div class="field"><label>Notes</label><textarea name="notes"></textarea></div>`,
       { onSubmit: async f => { await api('/api/budgets', { method: 'PUT', body: clean(formData(f)) }); toast('Budget saved'); adminView(); } });
     const userForm = u => modal(u ? `Edit ${u.full_name}` : 'New user', h`<div class="form-grid">${u ? '' : h`<div class="field"><label>Email *</label><input name="email" type="email" required></div>`}
@@ -885,6 +958,7 @@
     [/^#\/reports\/(\d+)$/, m => reportDetailView(Number(m[1]))],
     [/^#\/import$/, () => importView()],
     [/^#\/admin$/, () => adminView()],
+    [/^#\/organization$/, () => organizationView()],
   ];
 
   async function route() {
@@ -892,7 +966,7 @@
     const hash = location.hash || '#/dashboard';
     if (!S.token) { if (hash !== '#/login') { location.hash = '#/login'; return; } return loginView(); }
     if (!S.user) {
-      try { S.user = await api('/api/auth/me'); S.meta = await api('/api/meta'); }
+      try { S.user = await api('/api/auth/me'); S.meta = await api('/api/meta'); applyBranding(); }
       catch (_) { return logout(); }
     }
     if (hash === '#/login') { location.hash = '#/dashboard'; return; }

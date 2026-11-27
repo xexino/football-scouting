@@ -22,39 +22,7 @@ from app.models import (
 )
 from app.security import create_access_token, hash_password
 from app.tenancy import SYSTEM, TenantContextMissing, TenantViolation, set_tenant
-from conftest import PASSWORD, stat_line
-
-B_ROLES = ["administrator", "sporting_director", "head_of_scouting", "data_analyst", "video_scout"]
-
-
-def _sys():
-    db = SessionLocal()
-    set_tenant(db, SYSTEM)
-    return db
-
-
-@pytest.fixture(scope="session")
-def B(client):
-    with _sys() as db:
-        org = Organization(slug="rival-fc", name="Rival FC", country="Algeria", currency="DZD", settings={})
-        db.add(org)
-        db.flush()
-        for role in B_ROLES:
-            u = User(email=f"rival.{role}@example.com", full_name=f"Rival {role}", hashed_password=hash_password(PASSWORD))
-            db.add(u)
-            db.flush()
-            db.add(Membership(user_id=u.id, organization_id=org.id, role=role))
-        db.commit()
-        org_id = org.id
-    H = {}
-    for role in B_ROLES:
-        r = client.post("/api/auth/token", data={"username": f"rival.{role}@example.com", "password": PASSWORD})
-        assert r.status_code == 200 and r.json()["organization_id"] == org_id
-        H[role] = {"Authorization": f"Bearer {r.json()['access_token']}"}
-    src = client.post("/api/data-sources", headers=H["head_of_scouting"], json={
-        "name": "Rival licensed feed", "source_type": "api_import", "license_notes": "Rival contract"}).json()
-    return {"id": org_id, "H": H, "source": src}
-
+from conftest import B_ROLES, PASSWORD, _sys, stat_line
 
 @pytest.fixture(scope="session")
 def shared(client):
@@ -215,9 +183,9 @@ def test_audit_budget_member_isolation(client, H, B):
     a_user_id = client.get("/api/auth/me", headers=H["video_scout"]).json()["id"]
     assert client.patch(f"/api/users/{a_user_id}", headers=B["H"]["administrator"],
                         json={"role": "data_analyst"}).status_code == 404
-    assert all(u["full_name"].startswith("Rival") for u in client.get("/api/users/directory", headers=B["H"]["video_scout"]).json())
+    assert all(u["full_name"].startswith("Rival FC") for u in client.get("/api/users/directory", headers=B["H"]["video_scout"]).json())
     exp = client.get("/api/admin/export", headers=B["H"]["administrator"]).json()
-    assert exp["organization"]["slug"] == "rival-fc"
+    assert exp["organization"]["slug"] == "rival"
     assert all(r["organization_id"] in (None, B["id"]) for t in exp["tables"].values() for r in t if "organization_id" in r)
 
 
@@ -254,9 +222,9 @@ def test_forged_org_claim_rejected(client, B):
     assert client.get("/api/players", headers={"Authorization": f"Bearer {no_org}"}).status_code == 403
 
 
-def test_password_change_revokes_tokens(client):
+def test_password_change_revokes_tokens(client, B):
     with _sys() as db:
-        org = db.scalar(select(Organization).where(Organization.slug == "rival-fc"))
+        org = db.get(Organization, B["id"])
         u = User(email="rotate@example.com", full_name="Rotate", hashed_password=hash_password("Rotate-pass-1"))
         db.add(u)
         db.flush()

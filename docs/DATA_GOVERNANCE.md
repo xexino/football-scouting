@@ -17,7 +17,7 @@ The platform never generates or imputes statistics for real players. Empty value
 
 ## Licensed data and footage
 
-* Import only data Raja has a licence to use (provider contract, federation data, own
+* Import only data your organization has a licence to use (provider contract, federation data, own
   collection). Record the contract reference in the source's licence notes.
 * **No unauthorised scraping.** The platform contains no scrapers. Do not import data
   scraped from websites whose terms forbid it.

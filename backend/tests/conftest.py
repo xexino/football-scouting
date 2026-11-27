@@ -85,3 +85,48 @@ def stat_line(source_id, **kw):
             "interceptions": 30, "defensive_duels": 150, "defensive_duels_won": 90}
     base.update(kw)
     return base
+
+
+# --------------------------------------------------------------------------- second organization
+from app.database import SessionLocal  # noqa: E402
+from app.models import Membership, Organization, User  # noqa: E402
+from app.security import hash_password  # noqa: E402
+from app.tenancy import SYSTEM, set_tenant  # noqa: E402
+
+B_ROLES = ["administrator", "sporting_director", "head_of_scouting", "data_analyst", "video_scout"]
+
+
+def _sys():
+    db = SessionLocal()
+    set_tenant(db, SYSTEM)
+    return db
+
+
+def create_org(client, slug: str, name: str, roles=B_ROLES, currency: str = "EUR", country: str = "Morocco"):
+    """Create an organization with one member per role; returns {"id", "H": headers by role}."""
+    with _sys() as db:
+        org = Organization(slug=slug, name=name, country=country, currency=currency, settings={})
+        db.add(org)
+        db.flush()
+        for role in roles:
+            u = User(email=f"{slug}.{role}@example.com", full_name=f"{name} {role}", hashed_password=hash_password(PASSWORD))
+            db.add(u)
+            db.flush()
+            db.add(Membership(user_id=u.id, organization_id=org.id, role=role))
+        db.commit()
+        org_id = org.id
+    H = {}
+    for role in roles:
+        r = client.post("/api/auth/token", data={"username": f"{slug}.{role}@example.com", "password": PASSWORD})
+        assert r.status_code == 200 and r.json()["organization_id"] == org_id, r.text
+        H[role] = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    return {"id": org_id, "H": H}
+
+
+@pytest.fixture(scope="session")
+def B(client):
+    """Second organization ("Rival FC") used by the isolation tests."""
+    org = create_org(client, "rival", "Rival FC", currency="DZD", country="Algeria")
+    org["source"] = client.post("/api/data-sources", headers=org["H"]["head_of_scouting"], json={
+        "name": "Rival licensed feed", "source_type": "api_import", "license_notes": "Rival contract"}).json()
+    return org
