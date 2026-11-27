@@ -1,0 +1,80 @@
+"""Raja Scout Intelligence — FastAPI application."""
+from __future__ import annotations
+
+import os
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
+
+from .config import settings
+from .database import Base, SessionLocal, engine
+from .routers import admin, auth, compare, dashboard, imports, pipeline, players, reference, reports, users, video
+
+FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
+
+
+def init_db(seed: bool | None = None) -> None:
+    Base.metadata.create_all(engine)
+    do_seed = seed if seed is not None else settings.seed_sample_data
+    if do_seed and settings.env == "production" and os.getenv("ALLOW_DEMO_IN_PRODUCTION") != "1":
+        raise RuntimeError("Refusing to load fictional demo data and demo accounts in production. "
+                           "Set SEED_SAMPLE_DATA=false and create users with `python -m app.cli create-user`.")
+    if do_seed:
+        from .seed import seed as run_seed
+        with SessionLocal() as db:
+            run_seed(db)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    init_db()
+    yield
+
+
+app = FastAPI(
+    title="Raja Scout Intelligence API",
+    version="1.0.0",
+    description=(
+        "Recruitment intelligence platform for Raja Club Athletic. "
+        "Authenticate via `POST /api/auth/token`, then send `Authorization: Bearer <token>`. "
+        "All statistics carry provenance; fictional sample data is flagged `is_fictional`."
+    ),
+    lifespan=lifespan,
+)
+
+if settings.cors_origins:
+    app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=True,
+                       allow_methods=["*"], allow_headers=["*"])
+
+
+@app.middleware("http")
+async def security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "same-origin")
+    return response
+
+
+for r in (auth, users, reference, players, compare, video, reports, pipeline, dashboard, imports, admin):
+    app.include_router(r.router)
+
+
+@app.get("/api/health", tags=["system"])
+def health():
+    with engine.connect() as conn:
+        conn.execute(text("SELECT 1"))
+    return {"status": "ok", "env": settings.env}
+
+
+if FRONTEND_DIR.exists():
+    app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
+
+    @app.get("/", include_in_schema=False)
+    def index():
+        return FileResponse(FRONTEND_DIR / "index.html")

@@ -1,0 +1,32 @@
+# Local / single-server deployment. See docs/DEPLOYMENT.md before using in production.
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: raja_scout
+      POSTGRES_USER: raja
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-raja}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U raja -d raja_scout"]
+      interval: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://raja:${POSTGRES_PASSWORD:-raja}@db:5432/raja_scout
+      RAJA_ENV: ${RAJA_ENV:-development}
+      SECRET_KEY: ${SECRET_KEY:-}
+      SEED_SAMPLE_DATA: ${SEED_SAMPLE_DATA:-true}
+    ports:
+      - "8000:8000"
+
+volumes:
+  pgdata:
