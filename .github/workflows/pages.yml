@@ -1,0 +1,42 @@
+# Publishes the public, read-only static demo (fictional demo organization only) to GitHub Pages,
+# the same way as football-prediction-agent: build a static snapshot, push it to branch gh-pages.
+# Live URL: https://xexino.github.io/football-scouting/
+# The full multi-tenant platform (logins, real clubs, saving data) needs a server deployment;
+# GitHub Pages can only serve static files.
+name: Pages (static demo)
+on:
+  push:
+    branches: ["claude/raja-scout-intelligence-tuu0bo", "main"]
+    paths: ["backend/**", "frontend/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+permissions:
+  contents: write   # push the gh-pages branch
+concurrency:
+  group: pages-static-demo
+  cancel-in-progress: true
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13", cache: pip, cache-dependency-path: backend/requirements.txt }
+      - run: pip install -r backend/requirements.txt
+      - name: Build static demo (aborts unless every exported record is fictional demo data)
+        run: cd backend && python -m tools.export_static ../site
+      - name: Publish to gh-pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test -f site/index.html && test -f site/data/search_index.json
+          cd site
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -qm "Static demo from ${GITHUB_SHA::7}"
+          for i in 1 2 3; do
+            git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" gh-pages && exit 0
+            echo "::warning::gh-pages push attempt $i failed"; sleep $((i * 10))
+          done
+          exit 1
