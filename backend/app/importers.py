@@ -159,6 +159,10 @@ def import_player(db: Session, raw: dict, source: DataSource, user_id: int | Non
             upsert_assessment(db, existing.id, private, user_id)
         db.flush()
         return existing, False
+    if owner is not None:
+        from .models import Organization
+        from .subscriptions import enforce_player_limit
+        enforce_player_limit(db, db.get(Organization, owner))  # row error once the plan limit is reached
     p = Player(**data, is_fictional=source.is_fictional, created_by_id=user_id)
     db.add(p)
     db.flush()
@@ -202,6 +206,8 @@ def import_stats(db: Session, raw: dict, source: DataSource) -> tuple[PlayerSeas
 
 
 def _err(e: Exception) -> str:
+    if getattr(e, "status_code", None) == 402:
+        return e.detail
     if isinstance(e, ValidationError):
         return "; ".join(f"{'.'.join(str(x) for x in err['loc'])}: {err['msg']}" for err in e.errors())
     return str(e)

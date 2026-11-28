@@ -8,6 +8,7 @@ from .. import audit
 from ..database import get_db
 from ..accounts import expiry, invitation_link, new_token, reset_link, send_link
 from ..config import settings
+from ..subscriptions import enforce_seat_limit
 from ..models import Invitation, Membership, PasswordResetToken, User, utcnow
 from pydantic import BaseModel, Field
 
@@ -59,6 +60,7 @@ def list_users(ctx: Ctx = Depends(require("users:manage")), db: Session = Depend
 @router.post("", status_code=201, summary="Add a member (creates the account if the email is new)")
 def create_user(body: UserCreate, request: Request, ctx: Ctx = Depends(require("users:manage")),
                 db: Session = Depends(get_db)):
+    enforce_seat_limit(db, ctx.organization)
     email = body.email.strip().lower()
     user = db.scalar(select(User).where(func.lower(User.email) == email))
     if user is None:
@@ -106,6 +108,8 @@ def update_user(user_id: int, body: UserUpdate, request: Request, ctx: Ctx = Dep
         if others:
             raise HTTPException(403, "This account also belongs to another organization; name changes are not allowed")
         m.user.full_name = changes["full_name"]
+    if changes.get("is_active") is True and not m.is_active:
+        enforce_seat_limit(db, ctx.organization)
     for k in ("role", "region", "is_active"):
         if k in changes:
             setattr(m, k, changes[k])
@@ -152,6 +156,7 @@ def create_invitation(body: InvitationIn, request: Request, ctx: Ctx = Depends(r
                                                    Invitation.accepted_at.is_(None),
                                                    Invitation.revoked_at.is_(None))).all():
         old.revoked_at = utcnow()  # only one live invitation per address
+    enforce_seat_limit(db, ctx.organization)  # pending invitations count as seats
     raw, digest = new_token()
     inv = Invitation(email=email, role=body.role, region=body.region, token_hash=digest,
                      expires_at=expiry(settings.invitation_ttl_hours), created_by_id=ctx.id)

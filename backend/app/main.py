@@ -15,7 +15,22 @@ from sqlalchemy import text
 from .config import settings
 from .database import Base, SessionLocal, engine
 from .tenancy import TenantContextMissing, TenantViolation
-from .routers import admin, auth, compare, dashboard, imports, organization, pipeline, players, reference, reports, users, video
+from .routers import (
+    admin,
+    auth,
+    compare,
+    dashboard,
+    imports,
+    organization,
+    pipeline,
+    platform,
+    players,
+    reference,
+    reports,
+    subscription,
+    users,
+    video,
+)
 
 logger = logging.getLogger("raja_scout")
 FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
@@ -102,7 +117,8 @@ async def _tenant_missing(request, exc):
     return JSONResponse({"detail": "Internal authorization error"}, status_code=500)
 
 
-for r in (auth, organization, users, reference, players, compare, video, reports, pipeline, dashboard, imports, admin):
+app.include_router(platform.billing_router)
+for r in (auth, organization, subscription, platform, users, reference, players, compare, video, reports, pipeline, dashboard, imports, admin):
     app.include_router(r.router)
 
 

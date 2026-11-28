@@ -6,6 +6,7 @@
     python -m app.cli create-org SLUG "Club name" [COUNTRY] [CURRENCY] [LANG]
     python -m app.cli create-user EMAIL "Full Name" ROLE ORG_SLUG   # prompts for password
     python -m app.cli create-user EMAIL "Full Name" platform_admin  # SaaS operator, no tenant data
+    python -m app.cli set-plan SLUG PLAN [STATUS] [PERIOD_END]     # manual billing
     python -m app.cli export-org SLUG FILE.json                      # tenant data export
     python -m app.cli delete-org SLUG                                # 2-step tenant deletion
     python -m app.cli schema-sql > ../docs/schema.sql      # PostgreSQL DDL
@@ -65,8 +66,12 @@ def create_org(slug: str, name: str, country: str = "", currency: str = "EUR", l
         set_tenant(db, SYSTEM)
         if db.scalar(select(Organization).where(Organization.slug == slug)):
             sys.exit("Organization slug already exists")
-        db.add(Organization(slug=slug, name=name, country=country or None, currency=currency.upper(),
-                            primary_language=language, is_demo=False, settings={}))
+        from .subscriptions import new_trial
+        org = Organization(slug=slug, name=name, country=country or None, currency=currency.upper(),
+                           primary_language=language, is_demo=False, settings={})
+        db.add(org)
+        db.flush()
+        db.add(new_trial(org.id))
         db.commit()
     print(f"Created organization {slug}")
 
@@ -103,6 +108,28 @@ def create_user(email: str, full_name: str, role: str, org_slug: str = "") -> No
             db.add(Membership(user_id=user.id, organization_id=org.id, role=role))
         db.commit()
     print(f"OK: {email} {role} {org_slug}")
+
+
+def set_plan(slug: str, plan: str, status: str = "active", period_end: str = "") -> None:
+    """Manual billing: record a payment / plan change. PERIOD_END as YYYY-MM-DD."""
+    from datetime import datetime, timezone
+
+    from .models import Organization
+    from .subscriptions import PLANS, STATUSES, get_subscription, new_trial
+    if plan not in PLANS or status not in STATUSES:
+        sys.exit(f"plan: {', '.join(PLANS)} | status: {', '.join(STATUSES)}")
+    with SessionLocal() as db:
+        set_tenant(db, SYSTEM)
+        org = db.scalar(select(Organization).where(Organization.slug == slug))
+        if org is None or org.is_demo:
+            sys.exit("Unknown (or demo) organization")
+        sub = get_subscription(db, org.id) or new_trial(org.id)
+        sub.plan, sub.status = plan, status
+        if period_end:
+            sub.current_period_end = datetime.fromisoformat(period_end).replace(tzinfo=timezone.utc)
+        db.add(sub)
+        db.commit()
+    print(f"{slug}: plan={plan} status={status} period_end={period_end or '-'}")
 
 
 def export_org(slug: str, path: str) -> None:
@@ -155,7 +182,7 @@ def schema_sql() -> None:
 
 
 def main(argv: list[str]) -> None:
-    cmds = {"export-org": export_org, "delete-org": delete_org, "bootstrap": bootstrap, "init-db": init_db, "create-org": create_org, "seed-demo": seed_demo, "create-user": create_user, "schema-sql": schema_sql}
+    cmds = {"set-plan": set_plan, "export-org": export_org, "delete-org": delete_org, "bootstrap": bootstrap, "init-db": init_db, "create-org": create_org, "seed-demo": seed_demo, "create-user": create_user, "schema-sql": schema_sql}
     if not argv or argv[0] not in cmds:
         sys.exit(__doc__)
     cmds[argv[0]](*argv[1:])

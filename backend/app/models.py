@@ -687,3 +687,28 @@ class PasswordResetToken(Base):
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+# --------------------------------------------------------------------------- SaaS subscription
+class Subscription(Base):
+    """Commercial state of one organization. Managed by platform operators (and, later, by a
+    billing provider's webhooks). Readable by the organization's members; not tenant data
+    (no scouting content), so it is not subject to the tenant filter — every query filters
+    explicitly by organization_id."""
+
+    __tablename__ = "subscriptions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), unique=True)
+    plan: Mapped[str] = mapped_column(String(30))
+    status: Mapped[str] = mapped_column(String(20))
+    trial_ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    current_period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    seats_override: Mapped[int | None] = mapped_column(Integer)
+    players_override: Mapped[int | None] = mapped_column(Integer)
+    billing_provider: Mapped[str] = mapped_column(String(30), default="manual")
+    provider_customer_id: Mapped[str | None] = mapped_column(String(120))
+    provider_subscription_id: Mapped[str | None] = mapped_column(String(120))
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)

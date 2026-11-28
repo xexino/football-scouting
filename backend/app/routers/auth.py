@@ -133,6 +133,8 @@ def accept_invitation(body: AcceptInvitation, request: Request, db: Session = De
     org = db.get(Organization, inv.organization_id)
     if org is None or org.status != "active":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "This organization is not active")
+    from ..subscriptions import assert_writable
+    assert_writable(db, org, "POST")  # no new members while the workspace is read-only
     user = db.scalar(select(User).where(func.lower(User.email) == inv.email))
     if user is None:
         if not body.full_name or len(body.full_name.strip()) < 2:

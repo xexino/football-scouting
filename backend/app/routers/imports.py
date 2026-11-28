@@ -10,6 +10,7 @@ from .. import audit
 from ..database import get_db
 from ..importers import import_player, import_stats, parse_csv, run_rows, template_csv
 from ..models import DataSource, User
+from ..subscriptions import require_feature
 from ..security import Ctx, has_permission, require
 
 router = APIRouter(prefix="/api/import", tags=["data import"])
@@ -72,6 +73,7 @@ class JsonImport(BaseModel):
 @router.post("/json", summary="Import players and stats as JSON (for provider adapters / ETL jobs)")
 def import_json(body: JsonImport, request: Request, user: Ctx = Depends(require("import:run", "stats:write")),
                 db: Session = Depends(get_db)):
+    require_feature(db, user.organization, "api_import")
     src = _source(db, body.data_source_id)
     fin = has_permission(user, "financials:read")
     pres = run_rows(db, body.players, lambda r: import_player(db, r, src, user.id, fin), body.dry_run)

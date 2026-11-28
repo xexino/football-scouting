@@ -30,6 +30,7 @@ from ..security import Ctx, has_permission, require
 from ..assessments import get_assessment, get_assessments, upsert_assessment
 from ..models import ASSESSMENT_FIELDS, FINANCIAL_FIELDS, PlayerAssessment
 from ..serializers import player_out, stats_out
+from ..subscriptions import enforce_player_limit
 
 router = APIRouter(prefix="/api/players", tags=["players"])
 
@@ -269,6 +270,7 @@ def create_player(body: PlayerCreate, request: Request, user: Ctx = Depends(requ
         data["is_fictional"] = src.is_fictional
     if data.get("current_club_id") and db.get(Club, data["current_club_id"]) is None:
         raise HTTPException(422, "Unknown club")
+    enforce_player_limit(db, user.organization)
     player = Player(**data, created_by_id=user.id)  # private to this organization (tenant guard)
     db.add(player)
     db.flush()

@@ -178,6 +178,7 @@
   // ------------------------------------------------------------------ shell
   const NOT_AFFILIATED = 'Raja Scout Intelligence is independent software. It is not affiliated with, endorsed or sponsored by Raja Club Athletic or any club using it.';
   const ICONS = {
+    platform: '<path d="M4 4h16v4H4zm0 6h16v4H4zm0 6h16v4H4zM6 5.5h2v1H6zm0 6h2v1H6zm0 6h2v1H6z"/>',
     organization: '<path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/>',
     dashboard: '<path d="M3 13h8V3H3zm10 8h8V11h-8zM3 21h8v-6H3zm10-18v6h8V3z"/>',
     players: '<path d="M16 11c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 3-1.34 3-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5C15 14.17 10.33 13 8 13zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>',
@@ -192,18 +193,31 @@
     ['dashboard', 'Dashboard', 'players:read'], ['players', 'Player database', 'players:read'], ['compare', 'Comparison', 'players:read'],
     ['pipeline', 'Recruitment pipeline', 'pipeline:read'], ['video', 'Video scouting', 'players:read'], ['reports', 'Scouting reports', 'players:read'],
     ['import', 'Data import', 'import:run'], ['organization', 'Organization', 'org:manage'], ['admin', 'Administration', null],
+    ['platform', 'Platform console', '__platform'],
   ];
   // Product mark: a neutral analytics glyph (radar chart). Deliberately NOT a club crest.
   const shield = '<svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><rect x="3" y="3" width="58" height="58" rx="14" fill="#0e241a" stroke="#2c5c47" stroke-width="2"/><polygon points="32,12 50,25 44,47 20,47 14,25" fill="none" stroke="#5f8473" stroke-width="1.5"/><polygon points="32,19 45,27 39,41 24,43 20,28" fill="#00a05a" fill-opacity=".35" stroke="#00c26e" stroke-width="2"/><circle cx="32" cy="19" r="2.6" fill="#d4af37"/></svg>';
 
   const initials = n => String(n || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('');
   function orgBrand() {
-    const o = S.user.organization || {};
+    const o = S.user.organization || { name: 'Platform operator', short_name: 'Platform' };
     const logo = o.logo_data_url && /^data:image\/(png|jpeg|webp);base64,/.test(o.logo_data_url)
       ? h`<img class="org-logo" src="${o.logo_data_url}" alt="">` : h`<div class="org-logo ph">${initials(o.short_name || o.name)}</div>`;
     const orgs = S.user.organizations || [];
     return h`<div class="brand">${logo}<div style="min-width:0"><div class="brand-name" title="${o.name}">${o.short_name || o.name}</div><div class="brand-sub">Raja Scout Intelligence</div></div></div>
       ${orgs.length > 1 ? h`<div class="field" style="padding:0 6px"><label for="org-switch">Organization</label><select id="org-switch">${orgs.map(x => h`<option value="${x.id}" ${x.id === o.id ? raw('selected') : ''}>${x.name}${x.is_demo ? ' (demo)' : ''}</option>`)}</select></div>` : ''}`;
+  }
+  async function loadSubscription() {
+    S.sub = null;
+    if (S.user && S.user.organization) { try { S.sub = await api('/api/subscription'); } catch (_) { } }
+  }
+  function subscriptionBanner() {
+    const x = S.sub;
+    if (!x || x.plan === 'demo') return '';
+    if (!x.writable) return h`<div class="notice err"><strong>Read-only workspace.</strong> Subscription status: ${label(x.effective_status === 'none' ? 'not set up' : x.effective_status)}. Your data remains visible and exportable; changes are disabled until the subscription is renewed.</div>`;
+    if (x.effective_status === 'past_due') return h`<div class="notice warn"><strong>Payment overdue.</strong> Renew within the ${x.grace_days}-day grace period to avoid read-only mode.</div>`;
+    if (x.effective_status === 'trialing' && x.trial_days_left != null && x.trial_days_left <= 14) return h`<div class="notice info">Trial of <strong>${x.plan_name}</strong> — ${x.trial_days_left} day${x.trial_days_left === 1 ? '' : 's'} left.</div>`;
+    return '';
   }
   function applyBranding() {
     const o = (S.user && S.user.organization) || {};
@@ -215,23 +229,24 @@
   async function switchOrganization(id) {
     try {
       const r = await api('/api/auth/switch-organization', { method: 'POST', body: { organization_id: id } });
-      setToken(r.access_token); S.user = await api('/api/auth/me'); S.compare.clear(); saveCompare(); refCache = null;
+      setToken(r.access_token); S.user = await api('/api/auth/me'); await loadSubscription(); S.compare.clear(); saveCompare(); refCache = null;
       applyBranding(); location.hash = '#/dashboard'; route();
     } catch (e) { toast(e.message, true); }
   }
 
   function shell(active, title, content, actions = '') {
     const showAdmin = can('users:manage') || can('audit:read') || can('backup:run') || can('budget:manage');
+    if (!S.user.organization) S.user.organization = null;
     $('#app').innerHTML = h`<div class="shell">
       <aside class="sidebar" id="sidebar">
         ${orgBrand()}
-        <nav class="nav">${NAV.filter(([k, , p]) => k === 'admin' ? showAdmin : can(p)).map(([k, t]) => h`<a href="#/${k}" class="${active === k ? 'active' : ''}"><svg viewBox="0 0 24 24" fill="currentColor">${raw(ICONS[k])}</svg>${t}${k === 'compare' && S.compare.size ? h` <span class="badge b-gold">${S.compare.size}</span>` : ''}</a>`)}</nav>
-        <div class="side-foot"><div class="who">${S.user.full_name}</div><div class="muted">${S.meta?.roles?.[S.user.role] || S.user.role}</div>
+        <nav class="nav">${NAV.filter(([k, , p]) => k === 'admin' ? showAdmin : p === '__platform' ? S.user.is_platform_admin : can(p)).map(([k, t]) => h`<a href="#/${k}" class="${active === k ? 'active' : ''}"><svg viewBox="0 0 24 24" fill="currentColor">${raw(ICONS[k])}</svg>${t}${k === 'compare' && S.compare.size ? h` <span class="badge b-gold">${S.compare.size}</span>` : ''}</a>`)}</nav>
+        <div class="side-foot"><div class="who">${S.user.full_name}</div><div class="muted">${S.user.role ? (S.meta?.roles?.[S.user.role] || S.user.role) : 'Platform operator'}</div>
           <div class="row" style="margin-top:8px"><button class="btn sm" id="pw-btn">Password</button><button class="btn sm" id="logout-btn">Log out</button></div></div>
       </aside>
       <div class="main">
         <header class="topbar"><button class="btn sm menu-btn" id="menu-btn" aria-label="Menu">☰</button><div class="title">${title}</div><div class="spacer"></div>${actions}</header>
-        <main class="content" id="content">${S.user.organization?.is_demo ? h`<div class="fict-banner"><strong>Demo organization.</strong> Everything here is fictional sample data. Never enter real club data in a demo environment.</div>` : ''}${content}</main>
+        <main class="content"><div id="banners">${subscriptionBanner()}${S.user.organization?.is_demo ? h`<div class="fict-banner"><strong>Demo organization.</strong> Everything here is fictional sample data. Never enter real club data in a demo environment.</div>` : ''}</div><div id="content">${content}</div></main>
       </div></div>`.s;
     $('#logout-btn').onclick = logout;
     $('#pw-btn').onclick = changePassword;
@@ -277,7 +292,9 @@
         setToken(data.access_token);
         S.user = await api('/api/auth/me');
         S.meta = await api('/api/meta');
+        await loadSubscription();
         applyBranding();
+        if (!S.user.organization && S.user.is_platform_admin) { location.hash = '#/platform'; return; }
         location.hash = '#/dashboard';
       } catch (err) { toast(err.message, true); }
     };
@@ -920,6 +937,69 @@
     $('#copy-link').onclick = async () => { try { await navigator.clipboard.writeText(url); toast('Link copied'); } catch (_) { $('#link-out').select(); } };
   }
 
+  const lim = v => v == null ? 'unlimited' : v;
+  function planCard(x) {
+    if (!x) return '';
+    const u = x.usage, l = x.limits;
+    const meter = (used, cap) => cap == null ? '' : h`<div class="bar-track" style="margin-top:4px"><div class="bar-fill ${used > cap ? '' : 'gold'}" style="width:${Math.min(100, used / Math.max(1, cap) * 100)}%"></div></div>`;
+    return h`<div class="card span2" style="grid-column:1/-1"><div class="card-head"><h3>Plan & usage</h3><span class="badge ${x.writable ? 'b-green' : 'b-red'}">${label(x.effective_status)}</span></div>
+      <div class="grid g3"><div><div class="muted">Plan</div><div style="font-size:20px;font-weight:700">${x.plan_name || '—'}</div>
+        ${x.trial_ends_at && x.effective_status === 'trialing' ? h`<div class="faint">Trial ends ${fmtDate(x.trial_ends_at)}</div>` : ''}${x.current_period_end ? h`<div class="faint">Paid until ${fmtDate(x.current_period_end)}</div>` : ''}</div>
+      <div><div class="muted">Seats (members + pending invitations)</div><div style="font-size:20px;font-weight:700">${u.seats_used} / ${lim(l.seats)}</div>${meter(u.seats_used, l.seats)}</div>
+      <div><div class="muted">Private players</div><div style="font-size:20px;font-weight:700">${u.private_players} / ${lim(l.private_players)}</div>${meter(u.private_players, l.private_players)}</div></div>
+      <p class="faint" style="font-size:12px;margin-top:10px">Included: ${l.features.map(f => label(f)).join(' · ') || '—'}. Plan changes are handled by your account manager.</p></div>`;
+  }
+
+  // ------------------------------------------------------------------ platform console (SaaS operator)
+  async function platformView() {
+    loading('platform', 'Platform console');
+    const [orgs, plans] = await Promise.all([api('/api/platform/organizations'), api('/api/platform/plans')]);
+    const statusBadge = st => h`<span class="badge ${st === 'active' || st === 'trialing' || st === 'demo' ? 'b-green' : st === 'past_due' ? 'b-amber' : 'b-red'}">${label(st)}</span>`;
+    shell('platform', 'Platform console', h`
+      <div class="notice">Operator view: organization metadata, subscriptions and usage counts only. Scouting data of customer organizations is not accessible from here.</div>
+      <div class="card" style="margin-top:14px"><div class="card-head"><h3>Organizations (${orgs.length})</h3><button class="btn primary sm" id="new-org">+ New organization</button></div>
+      <div class="table-wrap"><table><thead><tr><th>Organization</th><th>Type</th><th>Plan</th><th>Status</th><th>Trial / paid until</th><th class="num">Seats</th><th class="num">Players</th><th></th></tr></thead><tbody>
+      ${orgs.map(o => { const x = o.subscription; return h`<tr><td><strong>${o.name}</strong><div class="faint">${o.slug} · ${o.country || '—'} · ${o.currency}</div></td>
+        <td>${o.is_demo ? h`<span class="badge b-amber">demo</span>` : h`<span class="badge b-blue">customer</span>`}${o.status !== 'active' ? h` <span class="badge b-red">${label(o.status)}</span>` : ''}</td>
+        <td>${x.plan_name || '—'}</td><td>${statusBadge(x.effective_status)}</td>
+        <td class="faint">${x.effective_status === 'trialing' ? fmtDate(x.trial_ends_at) : fmtDate(x.current_period_end)}</td>
+        <td class="num">${x.usage.seats_used} / ${lim(x.limits.seats)}</td><td class="num">${x.usage.private_players} / ${lim(x.limits.private_players)}</td>
+        <td>${o.is_demo ? '' : h`<button class="btn sm sub-edit" data-id="${o.id}">Subscription</button>`}
+          ${o.status === 'pending_deletion' ? h`<button class="btn sm ghost del-cancel" data-id="${o.id}">Cancel deletion</button> <button class="btn sm danger del-purge" data-id="${o.id}" data-slug="${o.slug}">Purge</button>`
+            : h`<button class="btn sm ghost del-sched" data-id="${o.id}" data-name="${o.name}">Delete…</button>`}</td></tr>`; })}
+      </tbody></table></div></div>`);
+    $('#new-org').onclick = () => modal('New organization', h`<div class="form-grid">
+      <div class="field"><label>Name *</label><input name="name" required></div><div class="field"><label>Slug * (lowercase, hyphens)</label><input name="slug" required pattern="[a-z0-9-]+"></div>
+      <div class="field"><label>Country</label><input name="country"></div><div class="field"><label>Currency</label><input name="currency" value="MAD" maxlength="3"></div>
+      <div class="field"><label>Plan</label><select name="plan">${plans.map(p => h`<option value="${p.code}" ${p.code === 'club_pro' ? raw('selected') : ''}>${p.name}</option>`)}</select></div>
+      <div class="field"><label>Trial days</label><input name="trial_days" type="number" value="30" min="0" max="90"></div>
+      <div class="field"><label>First administrator email *</label><input name="admin_email" type="email" required></div></div>`,
+      { submitLabel: 'Create', onSubmit: async f => { const r = await api('/api/platform/organizations', { method: 'POST', body: clean(formData(f)) }); showLink('First administrator invitation', r.admin_invite_url, `Send this link to the club's administrator. ${r.name} starts a ${r.subscription.plan_name} trial.`); platformView(); return true; } });
+    $$('.sub-edit').forEach(b => b.onclick = () => {
+      const o = orgs.find(x => x.id === Number(b.dataset.id)); const x = o.subscription;
+      const d = v => v ? String(v).slice(0, 10) : '';
+      modal(`Subscription — ${o.name}`, h`<div class="form-grid">
+        <div class="field"><label>Plan</label><select name="plan">${plans.map(p => h`<option value="${p.code}" ${p.code === x.plan ? raw('selected') : ''}>${p.name}</option>`)}</select></div>
+        <div class="field"><label>Status</label><select name="status">${['trialing', 'active', 'past_due', 'suspended', 'canceled', 'expired'].map(st => h`<option ${st === x.status ? raw('selected') : ''}>${st}</option>`)}</select></div>
+        <div class="field"><label>Trial ends</label><input name="trial_ends_at" type="date" value="${d(x.trial_ends_at)}"></div>
+        <div class="field"><label>Paid until (period end)</label><input name="current_period_end" type="date" value="${d(x.current_period_end)}"></div>
+        <div class="field"><label>Seat override</label><input name="seats_override" type="number" min="0" placeholder="plan default"></div>
+        <div class="field"><label>Player override</label><input name="players_override" type="number" min="0" placeholder="plan default"></div></div>
+        <p class="faint" style="font-size:12px">Manual billing: record invoices / bank transfers by setting status "active" and the paid-until date.</p>`,
+        { onSubmit: async f => { const v = formData(f); const body = { plan: v.plan, status: v.status };
+          if (v.trial_ends_at) body.trial_ends_at = v.trial_ends_at + 'T23:59:59Z'; if (v.current_period_end) body.current_period_end = v.current_period_end + 'T23:59:59Z';
+          if (v.seats_override != null) body.seats_override = v.seats_override; if (v.players_override != null) body.players_override = v.players_override;
+          await api(`/api/platform/organizations/${o.id}/subscription`, { method: 'PATCH', body }); toast('Subscription updated'); platformView(); } });
+    });
+    $$('.del-sched').forEach(b => b.onclick = async () => { if (!confirm(`Schedule deletion of ${b.dataset.name}? All members lose access immediately; data is kept until purged.`)) return; await api(`/api/platform/organizations/${b.dataset.id}/schedule-deletion`, { method: 'POST' }); platformView(); });
+    $$('.del-cancel').forEach(b => b.onclick = async () => { await api(`/api/platform/organizations/${b.dataset.id}/cancel-deletion`, { method: 'POST' }); platformView(); });
+    $$('.del-purge').forEach(b => b.onclick = async () => {
+      const typed = prompt(`PERMANENT deletion. Type the slug "${b.dataset.slug}" to purge all of its data:`);
+      if (typed == null) return;
+      try { const r = await api(`/api/platform/organizations/${b.dataset.id}/purge`, { method: 'POST', body: { confirm_slug: typed } }); toast(`Purged ${r.slug}`); platformView(); } catch (e) { toast(e.message, true); }
+    });
+  }
+
   // ------------------------------------------------------------------ organization settings
   async function organizationView() {
     loading('organization', 'Organization');
@@ -946,7 +1026,8 @@
           <div class="muted" style="font-size:12.5px">PNG, JPEG or WebP, max 256 KB.<br>SVG is not accepted for security reasons.</div></div>
         <div class="row"><input type="file" id="logo-file" accept="image/png,image/jpeg,image/webp" style="flex:1"><button class="btn primary" id="logo-up">Upload</button>${o.logo_data_url ? h`<button class="btn danger" id="logo-del">Remove</button>` : ''}</div>
         <h3 style="margin-top:22px">Workspace</h3><dl class="kv"><dt>Identifier</dt><dd><code>${o.slug}</code></dd><dt>Type</dt><dd>${o.is_demo ? h`<span class="badge b-amber">Demo (fictional data)</span>` : h`<span class="badge b-green">Customer</span>`}</dd><dt>Status</dt><dd>${label(o.status)}</dd></dl>
-        <p class="faint" style="font-size:11.5px;margin-top:14px">${NOT_AFFILIATED}</p></div></div>`);
+        <p class="faint" style="font-size:11.5px;margin-top:14px">${NOT_AFFILIATED}</p></div>
+      ${planCard(S.sub)}</div>`);
     const refreshMe = async () => { S.user = await api('/api/auth/me'); applyBranding(); organizationView(); };
     $('#org-form').onsubmit = async e => {
       e.preventDefault();
@@ -1025,6 +1106,7 @@
     [/^#\/import$/, () => importView()],
     [/^#\/admin$/, () => adminView()],
     [/^#\/organization$/, () => organizationView()],
+    [/^#\/platform$/, () => platformView()],
   ];
 
   async function route() {
@@ -1035,10 +1117,11 @@
     if (pub) return pub[1] === 'invite' ? inviteView(pub[2]) : resetView(pub[2]);
     if (!S.token) { if (hash !== '#/login') { location.hash = '#/login'; return; } return loginView(); }
     if (!S.user) {
-      try { S.user = await api('/api/auth/me'); S.meta = await api('/api/meta'); applyBranding(); }
+      try { S.user = await api('/api/auth/me'); S.meta = await api('/api/meta'); await loadSubscription(); applyBranding(); }
       catch (_) { return logout(); }
     }
     if (hash === '#/login') { location.hash = '#/dashboard'; return; }
+    if (!S.user.organization && hash !== '#/platform') { location.hash = S.user.is_platform_admin ? '#/platform' : '#/login'; return; }
     for (const [re, fn] of ROUTES) {
       const m = hash.match(re);
       if (m) {

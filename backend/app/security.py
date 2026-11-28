@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 import bcrypt
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
@@ -207,7 +207,7 @@ class Ctx:
         return permissions_for(self.role)
 
 
-def get_ctx(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> Ctx:
+def get_ctx(request: Request, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> Ctx:
     payload = decode_token(token)
     user = _load_user(db, payload)
     org_id = payload.get("org")
@@ -220,6 +220,8 @@ def get_ctx(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) 
         raise HTTPException(status.HTTP_403_FORBIDDEN, "You are not a member of this organization")
     if org.status == "pending_deletion":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "This organization is scheduled for deletion")
+    from .subscriptions import assert_writable
+    assert_writable(db, org, request.method)  # expired/suspended subscription => read-only (402 on writes)
     set_tenant(db, org.id)  # from here on every ORM query is scoped to this organization
     return Ctx(user=user, membership=membership, organization=org)
 

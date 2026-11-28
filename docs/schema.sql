@@ -167,6 +167,27 @@ CREATE TABLE recruitment_budgets (
 
 CREATE INDEX ix_recruitment_budgets_organization_id ON recruitment_budgets (organization_id);
 
+CREATE TABLE subscriptions (
+	id SERIAL NOT NULL, 
+	organization_id INTEGER NOT NULL, 
+	plan VARCHAR(30) NOT NULL, 
+	status VARCHAR(20) NOT NULL, 
+	trial_ends_at TIMESTAMP WITH TIME ZONE, 
+	current_period_end TIMESTAMP WITH TIME ZONE, 
+	seats_override INTEGER, 
+	players_override INTEGER, 
+	billing_provider VARCHAR(30) NOT NULL, 
+	provider_customer_id VARCHAR(120), 
+	provider_subscription_id VARCHAR(120), 
+	notes TEXT, 
+	created_at TIMESTAMP WITH TIME ZONE NOT NULL, 
+	updated_at TIMESTAMP WITH TIME ZONE NOT NULL, 
+	PRIMARY KEY (id), 
+	UNIQUE (organization_id), 
+	FOREIGN KEY(organization_id) REFERENCES organizations (id) ON DELETE CASCADE
+);
+
+
 CREATE TABLE clubs (
 	id SERIAL NOT NULL, 
 	organization_id INTEGER, 
