@@ -57,6 +57,11 @@ class Settings:
         default_factory=lambda: int(os.getenv("MAX_LOGIN_ATTEMPTS_PER_IP", "30"))
     )
 
+    # MCP (Model Context Protocol) gateway for AI agents — see docs/mcp/MCP_ARCHITECTURE.md.
+    # Write tools stay unregistered (not even listed) unless explicitly enabled.
+    mcp_write_tools_enabled: bool = field(default_factory=lambda: _bool("MCP_WRITE_TOOLS_ENABLED", False))
+    mcp_rate_limit_per_minute: int = field(default_factory=lambda: int(os.getenv("MCP_RATE_LIMIT_PER_MINUTE", "60")))
+
     # Run table creation / demo seeding inside the web process. Disable when a separate
     # bootstrap step runs first (Docker image), so several workers don't race.
     init_on_startup: bool = field(default_factory=lambda: _bool("INIT_ON_STARTUP", True))

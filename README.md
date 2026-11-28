@@ -125,3 +125,5 @@ scripts/               backup.sh / restore.sh
 * [Analytics methodology](docs/ANALYTICS.md)
 * [Data governance & licensing](docs/DATA_GOVERNANCE.md)
 * [Database schema](docs/schema.sql) · [Roadmap](docs/ROADMAP.md)
+* [MCP for AI agents](docs/mcp/MCP_ARCHITECTURE.md) — [tools](docs/mcp/RAJA_SCOUT_TOOLS.md) · [external MCP review](docs/mcp/EXTERNAL_MCP_EVALUATION.md) (development only)
+* [Open-source scouting landscape](docs/research/OPEN_SOURCE_LANDSCAPE.md)

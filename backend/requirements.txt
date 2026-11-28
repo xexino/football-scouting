@@ -7,3 +7,4 @@ PyJWT==2.15.0
 bcrypt==5.0.0
 python-multipart==0.0.32
 alembic==1.20.1
+mcp==2.3.0

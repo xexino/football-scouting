@@ -22,6 +22,7 @@ Authoritative list of what each data source may be used for. Maintained by the
 | football-data.org | UNVERIFIED | — (testing only) | Pricing/policies read; no terms page found (`/terms` → 404); commercial use not stated | Ask provider in writing before any production use |
 | API-Football | UNVERIFIED | — (testing only, once a free key exists) | Official pages behind Cloudflare challenge; not bypassed | Obtain and archive terms before production use |
 | Sportmonks | UNVERIFIED | — | Official pages return 403; secondary sources only | — |
+| SportAPI (sportapi.ai) | UNVERIFIED | — | Site unreachable from the evaluation environment (2026-11-28); nothing verified | Founder to read & archive terms/pricing before any use |
 | Wyscout (Hudl) | PAID-CONTRACT | — | Official: access via "Contact Sales" | Founder approval required |
 | Club-imported data (CSV/JSON) | Customer's own licence | That customer only (tenant-private) | Platform rule: imports private to the importing organization | Customer warrants its rights at import (UI notice) |
 | Transfermarkt, FBref, WhoScored, SofaScore, FotMob, Flashscore, unofficial APIs, scraped Kaggle sets | EXCLUDED | — | Would require scraping / unknown provenance | — |

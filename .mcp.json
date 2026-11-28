@@ -1,0 +1,28 @@
+{
+  "mcpServers": {
+    "football-docs": {
+      "command": "npx",
+      "args": ["-y", "football-docs@0.17.10"],
+      "env": { "FOOTBALL_DOCS_DATA": "bundled" }
+    },
+    "raja-scout": {
+      "command": "./backend/tools/raja-scout-mcp.sh",
+      "args": [],
+      "env": {
+        "RAJA_SCOUT_MCP_TOKEN": "${RAJA_SCOUT_MCP_TOKEN:-}",
+        "DATABASE_URL": "${DATABASE_URL:-postgresql+psycopg://raja:raja@localhost:5432/raja_scout}",
+        "SECRET_KEY": "${SECRET_KEY:-}",
+        "INIT_ON_STARTUP": "false",
+        "MCP_WRITE_TOOLS_ENABLED": "false"
+      }
+    },
+    "sportmonks-football": {
+      "command": "npx",
+      "args": ["-y", "@sportmonks/football-mcp-server@1.5.0"],
+      "env": {
+        "SPORTMONKS_API_TOKEN": "${SPORTMONKS_API_TOKEN:-}",
+        "SPORTMONKS_LOG_FILE": "off"
+      }
+    }
+  }
+}
