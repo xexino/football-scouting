@@ -1,0 +1,527 @@
+{
+ "probed_at": "2026-11-28T09:47:01.614082+00:00",
+ "finished_at": "2026-11-28T09:49:30.020035+00:00",
+ "sources": {
+  "football_data_org_competitions": 138,
+  "statsbomb_competition_seasons": 80
+ },
+ "competitions": [
+  {
+   "competition": "Botola Pro",
+   "country": "Morocco",
+   "football_data_org": {
+    "listed": false
+   },
+   "thesportsdb": {
+    "league_found": true,
+    "league_name": "Moroccan Championship",
+    "current_season": "2026-2027",
+    "teams_returned_free_key": 10,
+    "players_sampled": 0,
+    "field_fill_rate": {},
+    "season_stats_available": false
+   },
+   "openfootball": {
+    "file": null
+   },
+   "statsbomb_open": []
+  },
+  {
+   "competition": "Botola 2",
+   "country": "Morocco",
+   "football_data_org": {
+    "listed": false
+   },
+   "thesportsdb": {
+    "league_found": true,
+    "league_name": "Moroccan Botola 2",
+    "current_season": "2026-2027",
+    "teams_returned_free_key": 10,
+    "players_sampled": 0,
+    "field_fill_rate": {},
+    "season_stats_available": false
+   },
+   "openfootball": {
+    "file": null
+   },
+   "statsbomb_open": []
+  },
+  {
+   "competition": "Tunisia Ligue 1",
+   "country": "Tunisia",
+   "football_data_org": {
+    "listed": false
+   },
+   "thesportsdb": {
+    "league_found": true,
+    "league_name": "Tunisian Ligue 1",
+    "current_season": "2026-2027",
+    "teams_returned_free_key": 10,
+    "players_sampled": 1,
+    "field_fill_rate": {
+     "dateBorn": 1.0,
+     "strNationality": 1.0,
+     "strPosition": 1.0,
+     "strHeight": 1.0,
+     "strTeam": 1.0,
+     "strFoot": 0.0,
+     "idAPIfootball": 1.0,
+     "idTransferMkt": 1.0
+    },
+    "season_stats_available": false
+   },
+   "openfootball": {
+    "file": null
+   },
+   "statsbomb_open": []
+  },
+  {
+   "competition": "Egypt Premier League",
+   "country": "Egypt",
+   "football_data_org": {
+    "listed": false
+   },
+   "thesportsdb": {
+    "league_found": true,
+    "league_name": "Egyptian Premier League",
+    "current_season": "2026-2027",
+    "teams_returned_free_key": 10,
+    "players_sampled": 20,
+    "field_fill_rate": {
+     "dateBorn": 1.0,
+     "strNationality": 1.0,
+     "strPosition": 0.95,
+     "strHeight": 0.55,
+     "strTeam": 1.0,
+     "strFoot": 0.0,
+     "idAPIfootball": 0.95,
+     "idTransferMkt": 0.05
+    },
+    "season_stats_available": false
+   },
+   "openfootball": {
+    "file": null
+   },
+   "statsbomb_open": []
+  },
+  {
+   "competition": "Senegal Ligue 1",
+   "country": "Senegal",
+   "football_data_org": {
+    "listed": false
+   },
+   "thesportsdb": {
+    "league_found": true,
+    "league_name": "Senegal Ligue 1",
+    "current_season": "2026-2027",
+    "teams_returned_free_key": 10,
+    "players_sampled": 0,
+    "field_fill_rate": {},
+    "season_stats_available": false
+   },
+   "openfootball": {
+    "file": null
+   },
+   "statsbomb_open": []
+  },
+  {
+   "competition": "Nigeria NPFL",
+   "country": "Nigeria",
+   "football_data_org": {
+    "listed": false
+   },
+   "thesportsdb": {
+    "league_found": true,
+    "league_name": "Nigerian NPFL",
+    "current_season": "2026-2027",
+    "teams_returned_free_key": 10,
+    "players_sampled": 0,
+    "field_fill_rate": {},
+    "season_stats_available": false
+   },
+   "openfootball": {
+    "file": null
+   },
+   "statsbomb_open": []
+  },
+  {
+   "competition": "Ghana Premier League",
+   "country": "Ghana",
+   "football_data_org": {
+    "listed": false
+   },
+   "thesportsdb": {
+    "league_found": true,
+    "league_name": "Ghanaian Premier League",
+    "current_season": "2026-2027",
+    "teams_returned_free_key": 10,
+    "players_sampled": 2,
+    "field_fill_rate": {
+     "dateBorn": 1.0,
+     "strNationality": 1.0,
+     "strPosition": 1.0,
+     "strHeight": 0.5,
+     "strTeam": 1.0,
+     "strFoot": 0.0,
+     "idAPIfootball": 1.0,
+     "idTransferMkt": 0.0
+    },
+    "season_stats_available": false
+   },
+   "openfootball": {
+    "file": null
+   },
+   "statsbomb_open": []
+  },
+  {
+   "competition": "South Africa Premiership",
+   "country": "South Africa",
+   "football_data_org": {
+    "listed": false
+   },
+   "thesportsdb": {
+    "league_found": true,
+    "league_name": "South African Premier Soccer League",
+    "current_season": "2026-2027",
+    "teams_returned_free_key": 10,
+    "players_sampled": 20,
+    "field_fill_rate": {
+     "dateBorn": 1.0,
+     "strNationality": 1.0,
+     "strPosition": 1.0,
+     "strHeight": 0.7,
+     "strTeam": 1.0,
+     "strFoot": 0.0,
+     "idAPIfootball": 1.0,
+     "idTransferMkt": 0.1
+    },
+    "season_stats_available": false
+   },
+   "openfootball": {
+    "file": null
+   },
+   "statsbomb_open": [
+    "South America / Copa America"
+   ]
+  },
+  {
+   "competition": "English Premier League",
+   "country": "England",
+   "football_data_org": {
+    "listed": true,
+    "plan": "TIER_ONE",
+    "seasons": 128,
+    "last_updated": "2026-08-10T07:41:50Z"
+   },
+   "thesportsdb": {
+    "league_found": true,
+    "league_name": "English Premier League",
+    "current_season": "2026-2027",
+    "teams_returned_free_key": 10,
+    "players_sampled": 20,
+    "field_fill_rate": {
+     "dateBorn": 1.0,
+     "strNationality": 1.0,
+     "strPosition": 1.0,
+     "strHeight": 0.9,
+     "strTeam": 1.0,
+     "strFoot": 0.0,
+     "idAPIfootball": 0.95,
+     "idTransferMkt": 0.8
+    },
+    "season_stats_available": false
+   },
+   "openfootball": {
+    "http": 200,
+    "matches": 380,
+    "has_players": false
+   },
+   "statsbomb_open": [
+    "England / FA Women's Super League",
+    "England / Premier League"
+   ]
+  },
+  {
+   "competition": "French Ligue 1",
+   "country": "France",
+   "football_data_org": {
+    "listed": true,
+    "plan": "TIER_ONE",
+    "seasons": 83,
+    "last_updated": "2026-08-18T14:34:03Z"
+   },
+   "thesportsdb": {
+    "league_found": true,
+    "league_name": "French Ligue 1",
+    "current_season": "2026-2027",
+    "teams_returned_free_key": 10,
+    "players_sampled": 20,
+    "field_fill_rate": {
+     "dateBorn": 1.0,
+     "strNationality": 1.0,
+     "strPosition": 1.0,
+     "strHeight": 0.85,
+     "strTeam": 1.0,
+     "strFoot": 0.0,
+     "idAPIfootball": 0.95,
+     "idTransferMkt": 0.65
+    },
+    "season_stats_available": false
+   },
+   "openfootball": {
+    "http": 200,
+    "matches": 306,
+    "has_players": false
+   },
+   "statsbomb_open": [
+    "France / Ligue 1"
+   ]
+  },
+  {
+   "competition": "Portuguese Primeira Liga",
+   "country": "Portugal",
+   "football_data_org": {
+    "listed": true,
+    "plan": "TIER_ONE",
+    "seasons": 78,
+    "last_updated": "2026-08-08T13:18:56Z"
+   },
+   "thesportsdb": {
+    "league_found": true,
+    "league_name": "Portuguese Primeira Liga",
+    "current_season": "2026-2027",
+    "teams_returned_free_key": 10,
+    "players_sampled": 20,
+    "field_fill_rate": {
+     "dateBorn": 1.0,
+     "strNationality": 1.0,
+     "strPosition": 0.95,
+     "strHeight": 0.9,
+     "strTeam": 1.0,
+     "strFoot": 0.0,
+     "idAPIfootball": 0.95,
+     "idTransferMkt": 0.3
+    },
+    "season_stats_available": false
+   },
+   "openfootball": {
+    "http": 200,
+    "matches": 306,
+    "has_players": false
+   },
+   "statsbomb_open": []
+  },
+  {
+   "competition": "Belgian Pro League",
+   "country": "Belgium",
+   "football_data_org": {
+    "listed": true,
+    "plan": "TIER_TWO",
+    "seasons": 10,
+    "last_updated": "2026-08-21T14:15:31Z"
+   },
+   "thesportsdb": {
+    "league_found": true,
+    "league_name": "Belgian Pro League",
+    "current_season": "2026-2027",
+    "teams_returned_free_key": 10,
+    "players_sampled": 20,
+    "field_fill_rate": {
+     "dateBorn": 1.0,
+     "strNationality": 1.0,
+     "strPosition": 1.0,
+     "strHeight": 0.85,
+     "strTeam": 1.0,
+     "strFoot": 0.0,
+     "idAPIfootball": 1.0,
+     "idTransferMkt": 0.75
+    },
+    "season_stats_available": false
+   },
+   "openfootball": {
+    "http": 200,
+    "matches": 240,
+    "has_players": false
+   },
+   "statsbomb_open": []
+  },
+  {
+   "competition": "Dutch Eredivisie",
+   "country": "Netherlands",
+   "football_data_org": {
+    "listed": true,
+    "plan": "TIER_ONE",
+    "seasons": 71,
+    "last_updated": "2026-08-08T13:16:57Z"
+   },
+   "thesportsdb": {
+    "league_found": true,
+    "league_name": "Dutch Eredivisie",
+    "current_season": "2026-2027",
+    "teams_returned_free_key": 10,
+    "players_sampled": 20,
+    "field_fill_rate": {
+     "dateBorn": 1.0,
+     "strNationality": 1.0,
+     "strPosition": 1.0,
+     "strHeight": 0.95,
+     "strTeam": 1.0,
+     "strFoot": 0.0,
+     "idAPIfootball": 1.0,
+     "idTransferMkt": 0.6
+    },
+    "season_stats_available": false
+   },
+   "openfootball": {
+    "http": 200,
+    "matches": 306,
+    "has_players": false
+   },
+   "statsbomb_open": []
+  },
+  {
+   "competition": "Brazilian Serie A",
+   "country": "Brazil",
+   "football_data_org": {
+    "listed": true,
+    "plan": "TIER_ONE",
+    "seasons": 10,
+    "last_updated": "2026-10-31T12:49:16Z"
+   },
+   "thesportsdb": {
+    "league_found": true,
+    "league_name": "Brazilian Serie A",
+    "current_season": "2026",
+    "teams_returned_free_key": 10,
+    "players_sampled": 20,
+    "field_fill_rate": {
+     "dateBorn": 1.0,
+     "strNationality": 1.0,
+     "strPosition": 1.0,
+     "strHeight": 0.85,
+     "strTeam": 1.0,
+     "strFoot": 0.0,
+     "idAPIfootball": 0.9,
+     "idTransferMkt": 0.3
+    },
+    "season_stats_available": false
+   },
+   "openfootball": {
+    "http": 200,
+    "matches": 380,
+    "has_players": false
+   },
+   "statsbomb_open": []
+  },
+  {
+   "competition": "Argentine Primera Division",
+   "country": "Argentina",
+   "football_data_org": {
+    "listed": true,
+    "plan": "TIER_TWO",
+    "seasons": 10,
+    "last_updated": "2026-05-13T22:31:03Z"
+   },
+   "thesportsdb": {
+    "league_found": true,
+    "league_name": "Argentinian Primera Division",
+    "current_season": "2026",
+    "teams_returned_free_key": 10,
+    "players_sampled": 20,
+    "field_fill_rate": {
+     "dateBorn": 1.0,
+     "strNationality": 1.0,
+     "strPosition": 0.95,
+     "strHeight": 1.0,
+     "strTeam": 1.0,
+     "strFoot": 0.0,
+     "idAPIfootball": 1.0,
+     "idTransferMkt": 0.2
+    },
+    "season_stats_available": false
+   },
+   "openfootball": {
+    "http": 200,
+    "matches": 240,
+    "has_players": false
+   },
+   "statsbomb_open": [
+    "Argentina / Liga Profesional"
+   ]
+  },
+  {
+   "competition": "Uruguay Primera Division",
+   "country": "Uruguay",
+   "football_data_org": {
+    "listed": true,
+    "plan": "TIER_FOUR",
+    "seasons": 6,
+    "last_updated": "2026-05-11T15:46:10Z"
+   },
+   "thesportsdb": {
+    "league_found": true,
+    "league_name": "Uruguayan Primera Division",
+    "current_season": "2026",
+    "teams_returned_free_key": 10,
+    "players_sampled": 10,
+    "field_fill_rate": {
+     "dateBorn": 1.0,
+     "strNationality": 1.0,
+     "strPosition": 1.0,
+     "strHeight": 1.0,
+     "strTeam": 1.0,
+     "strFoot": 0.0,
+     "idAPIfootball": 1.0,
+     "idTransferMkt": 0.0
+    },
+    "season_stats_available": false
+   },
+   "openfootball": {
+    "file": null
+   },
+   "statsbomb_open": []
+  },
+  {
+   "competition": "Colombia Primera A",
+   "country": "Colombia",
+   "football_data_org": {
+    "listed": true,
+    "plan": "TIER_FOUR",
+    "seasons": 9,
+    "last_updated": "2026-05-14T00:01:50Z"
+   },
+   "thesportsdb": {
+    "league_found": true,
+    "league_name": "Colombian Liga DIMAYOR",
+    "current_season": "2026-2027",
+    "teams_returned_free_key": 1,
+    "players_sampled": 10,
+    "field_fill_rate": {
+     "dateBorn": 1.0,
+     "strNationality": 1.0,
+     "strPosition": 1.0,
+     "strHeight": 1.0,
+     "strTeam": 1.0,
+     "strFoot": 0.0,
+     "idAPIfootball": 1.0,
+     "idTransferMkt": 0.0
+    },
+    "season_stats_available": false
+   },
+   "openfootball": {
+    "file": null
+   },
+   "statsbomb_open": []
+  }
+ ],
+ "youth": {
+  "thesportsdb": {
+   "all_leagues_total_free_key": 10,
+   "youth_or_reserve_leagues": []
+  },
+  "football_data_org": [],
+  "statsbomb_open": [
+   "International / FIFA U20 World Cup"
+  ]
+ }
+}
