@@ -20,7 +20,7 @@ No keys were used; no purchases were made.
 | **OpenFootball** | ✅ TESTED | GitHub, no key | ✅ public domain (OFFICIAL README) | ❌ | ✅ BRA, ARG (fixtures) | ❌ no players | ❌ (match scores only) | ❌ | Use for fixtures / club & competition reference data |
 | **football-data.org** | ✅ TESTED (catalogue, 192 comps) | no token: 100 req/24 h, lists only; free account: 10 req/min, delayed scores (OFFICIAL) | **UNVERIFIED** (no terms page found; 404) | ❌ not listed | BRA ✅ free; ARG paid tier; URU/COL top tier | squads = paid add-on €29+/month (OFFICIAL) | scorers = paid | ❌ none | No African club leagues → not suitable for the core goal |
 | **TheSportsDB** | ✅ TESTED (17 leagues, squads) | key `123`, 30 req/min (OFFICIAL); lists truncated | ✅ data: "You may publicly display API data and monetise projects… on both the free tier and paid plans" (OFFICIAL); images: per-image licence | ✅ leagues, ⚠️ **19 players / 10 clubs**; Botola 2: 2 | ✅ leagues, ~10 players per club | ✅ DOB, nationality, position, height | ❌ no player statistics | UNVERIFIED (free list truncated) | Usable for *identity & cross-IDs* in Europe/S. America; too sparse in Africa |
-| **Wikidata** (added) | ✅ TESTED (rate-limited, see §5) | SPARQL; emergency limit 1 req/min during test | ✅ CC0 public domain | via club membership | ✅ | ✅ DOB, nationality, position (where entered) | ❌ | ❌ | Best legally clean **identity** source; no statistics |
+| **Wikidata** (added) | ⚠️ reachable, **queries refused (429, outage rule)** — coverage NOT MEASURED (§5) | SPARQL; emergency limit 1 req/min, Retry-After 1000 s during test | expected CC0 — licence page to be archived (UNVERIFIED) | NOT MEASURED | NOT MEASURED | data model has DOB, citizenship, position, club | ❌ | ❌ | Best legally clean **identity** source *in principle*; coverage still to be measured |
 
 ## 2. Findings that change the plan
 
@@ -115,11 +115,17 @@ odds CSV): no player data → out of scope.
 | Step | Proposal | Cost |
 |---|---|---|
 | 1 | Register **free** API-Football (and optionally football-data.org) keys yourself and save them via the secure credential form, so their real coverage of Botola Pro/2 and the African/South American leagues can be tested | €0 |
-| 2 | Build the provider-independent model now with **Wikidata (CC0)** for identities, **OpenFootball** for clubs/fixtures and **TheSportsDB** for identity cross-IDs (Europe/South America) | €0 |
+| 2 | Build the provider-independent model now, designed for **Wikidata (CC0)** identities (coverage to be measured first — §5), **OpenFootball** for clubs/fixtures and **TheSportsDB** for identity cross-IDs (Europe/South America) | €0 |
 | 3 | Keep statistics limited to data each club imports under its own licence (already supported, tenant-private) until a statistics provider's commercial terms are verified in writing | €0 |
 | 4 | Only if step 1 confirms coverage: request a written quote/terms from API-Football (and Wyscout for youth) — **no purchase without approval** | quote only |
 
 ## 5. Wikidata test results
 
-Recorded in `docs/data/evidence/wikidata_young_players_sample.json` once the rate-limited
-query completes (see the matrix §5).
+Tested 2026-11-28 from this environment: `query.wikidata.org` was reachable but enforcing an
+emergency rule — `HTTP 429 "Aggressively rate-limiting to 1 req / min - this rule was created
+during active wdqs outage"` — then `Retry-After: 1000` on two consecutive attempts (~35 min).
+No query completed, so **the number of young African/South American players in Wikidata and
+the fill rate of position/club fields are NOT MEASURED**. What is established: licence (CC0)
+and the data model (P569 birth date, P27 citizenship, P413 position, P54 club with start/end
+dates, external IDs). Next test: retry when the outage rule is lifted, or use the weekly
+Wikidata JSON dumps (no rate limit) for a batch import design.

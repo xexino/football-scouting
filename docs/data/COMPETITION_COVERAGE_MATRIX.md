@@ -34,7 +34,7 @@ Legend: ✅ tested & present · ⚠️ present but limited (see note) · ❌ tes
 
 | Field | football-data.org | TheSportsDB | OpenFootball | StatsBomb open | Wikidata (CC0) |
 |---|---|---|---|---|---|
-| Birth date / age | squads = paid add-on (403 without token) | ✅ `dateBorn` | ❌ no players | ❌ not in lineups | ✅ P569 (see §5) |
+| Birth date / age | squads = paid add-on (403 without token) | ✅ `dateBorn` | ❌ no players | ❌ not in lineups | model: P569 — fill rate NOT MEASURED (§5) |
 | Position | paid | ✅ `strPosition` (free text: "Attacker", "Right-Back") | ❌ | ✅ per match (event data) | ⚠️ P413 where entered |
 | Nationality | paid | ✅ `strNationality` | ❌ | ✅ `country` | ✅ P27 |
 | Club | paid | ✅ `strTeam` | — | ✅ per match | ✅ P54 (current = no end date) |
@@ -71,9 +71,14 @@ data or player statistics for African leagues.
 
 ## 5. Wikidata (CC0)
 
-See `docs/data/evidence/wikidata_young_players_sample.json` and §5 of the provider comparison.
-The endpoint was enforcing an emergency limit of 1 request/minute and `Retry-After: 1000`
-during testing (2026-11-28).
+Tested 2026-11-28 from this environment: `query.wikidata.org` was reachable but enforcing an
+emergency rule — `HTTP 429 "Aggressively rate-limiting to 1 req / min - this rule was created
+during active wdqs outage"` — then `Retry-After: 1000` on two consecutive attempts (~35 min).
+No query completed, so **the number of young African/South American players in Wikidata and
+the fill rate of position/club fields are NOT MEASURED**. What is established: licence (CC0)
+and the data model (P569 birth date, P27 citizenship, P413 position, P54 club with start/end
+dates, external IDs). Next test: retry when the outage rule is lifted, or use the weekly
+Wikidata JSON dumps (no rate limit) for a batch import design.
 
 ## 6. Free-key truncation observed (affects any "free" plan)
 

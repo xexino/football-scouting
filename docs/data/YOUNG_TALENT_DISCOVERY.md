@@ -9,7 +9,7 @@ implemented. Evidence: `GLOBAL_PROVIDER_COMPARISON.md`, `COMPETITION_COVERAGE_MA
 
 | Need | Legally usable source now | Gap |
 |---|---|---|
-| Young-player identity (name, DOB, nationality, position, club) | Wikidata (CC0); TheSportsDB data (Europe / S. America) | African squads sparse everywhere tested |
+| Young-player identity (name, DOB, nationality, position, club) | Wikidata (CC0 — coverage not yet measured, endpoint rate-limited during test); TheSportsDB data (Europe / S. America) | African squads sparse everywhere tested |
 | Clubs, competitions, fixtures | OpenFootball (public domain), TheSportsDB metadata | Morocco not in OpenFootball |
 | Minutes, appearances, goals, assists | **none verified** | needs API-Football test → written terms, or paid provider, or club-imported data |
 | Youth competitions (U17–U23) | **none verified** | Wyscout youth pack (paid) — founder decision |

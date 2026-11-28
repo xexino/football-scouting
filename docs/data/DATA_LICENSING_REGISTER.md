@@ -14,7 +14,7 @@ Authoritative list of what each data source may be used for. Maintained by the
 
 | Source | Status | Permitted use | Basis (quoted / checked 2026-11-28) | Conditions |
 |---|---|---|---|---|
-| Wikidata | VERIFIED-COMMERCIAL-OK | Player/club identity (name, DOB, nationality, position, clubs, external IDs) | Structured data released under CC0 (public domain dedication) | Respect WDQS rate limits + descriptive User-Agent; whitelist fields (no sensitive properties) |
+| Wikidata | UNVERIFIED (expected CC0 — quote & archive licence page to verify) | Player/club identity (name, DOB, nationality, position, clubs, external IDs) | Wikidata project licence: structured data under CC0 (well established; licence page not fetched in this session — archive a copy before first import) | Respect WDQS rate limits + descriptive User-Agent; whitelist fields (no sensitive properties) |
 | OpenFootball (football.json) | VERIFIED-COMMERCIAL-OK | Fixtures, results, club & competition names | README: "Free open public domain football (match fixtures & results) data" | Raw GitHub files; record commit/date |
 | TheSportsDB — data | VERIFIED-COMMERCIAL-OK (data only) | Identity fields, cross-provider IDs, league/club metadata | Terms: "You may publicly display API data and monetise projects that use it … on both the free tier and paid plans"; "Please do not scrape our website" | Official API only; free key 30 req/min; **never import `strEthnicity`**; app-store publishing needs paid tier |
 | TheSportsDB — images | UNVERIFIED per image | Only images whose `strCreativeCommons` = Yes **and** whose individual licence was checked | Terms: artwork under per-image Creative Commons; unknown licence "must not be used … publicly" | Default: do not import images |
