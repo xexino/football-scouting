@@ -1,8 +1,9 @@
 # Render blueprint: one-click deployment of Raja Scout Intelligence.
 # Deploy: https://render.com/deploy?repo=https://github.com/xexino/football-scouting
-# This configuration runs the FICTIONAL demo (demo accounts + sample data). For real club
-# use, set SEED_SAMPLE_DATA=false, remove ALLOW_DEMO_IN_PRODUCTION and create real users
-# (see docs/DEPLOYMENT.md).
+# This blueprint deploys a PUBLIC DEMO (DEPLOYMENT_MODE=demo): fictional data and demo
+# accounts only. A demo deployment refuses to start if its database contains a customer
+# organization. Customer environments use a separate service + database with
+# DEPLOYMENT_MODE=customer (see docs/DEPLOYMENT.md and docs/saas/04_STAGE3_PRODUCTION.md).
 databases:
   - name: raja-scout-db
     plan: free
@@ -27,10 +28,8 @@ services:
         generateValue: true
       - key: RAJA_ENV
         value: production
-      - key: SEED_SAMPLE_DATA
-        value: "true"
-      - key: ALLOW_DEMO_IN_PRODUCTION
-        value: "1"
+      - key: DEPLOYMENT_MODE
+        value: demo
       - key: WEB_CONCURRENCY
         value: "1"
       # You are asked for this during deployment: the password of all demo accounts.

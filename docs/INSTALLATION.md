@@ -36,7 +36,8 @@ manager. The important ones:
 | `DATABASE_URL` | `postgresql+psycopg://raja:raja@localhost:5432/raja_scout` | SQLAlchemy URL |
 | `RAJA_ENV` | `development` | `production` enforces a SECRET_KEY and blocks demo data |
 | `SECRET_KEY` | random per start (dev) | JWT signing key — **required** in production, ≥32 chars |
-| `SEED_SAMPLE_DATA` | `true` | Load fictional demo data + demo accounts on first start |
+| `DEPLOYMENT_MODE` | `demo` (dev) / `customer` (production) | `demo`: fictional demo organization + demo accounts; refuses customer data. `customer`: real clubs; never loads demo data |
+| `PUBLIC_BASE_URL` | request URL | Base URL used in invitation and password-reset links |
 | `DEMO_PASSWORD` | `RajaDemo2026!` | Demo account password |
 | `TOKEN_EXPIRE_MINUTES` | `480` | Session length |
 | `MIN_MINUTES_RELIABLE` | `900` | Below this, per-90 figures are flagged as a small sample |
@@ -55,10 +56,12 @@ uvicorn app.main:app --reload
 
 Real deployment (no demo data):
 ```bash
-export SEED_SAMPLE_DATA=false
-python -m app.cli init-db
-python -m app.cli create-user admin@rajaclubathletic.ma "Administrator" administrator
-python -m app.cli create-user director@rajaclubathletic.ma "Sporting Director" sporting_director
+export DEPLOYMENT_MODE=customer
+python -m app.cli init-db                                   # runs Alembic migrations
+python -m app.cli create-user ops@yourcompany.com "Platform Operator" platform_admin
+python -m app.cli create-org atlas-fc "Atlas FC" Morocco MAD fr
+python -m app.cli create-user admin@atlasfc.ma "Club Administrator" administrator atlas-fc
+# the club administrator then invites colleagues from Administration → Invite member
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 

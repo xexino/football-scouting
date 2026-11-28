@@ -1,8 +1,6 @@
 """Authentication (bcrypt + JWT) and role-based access control."""
 from __future__ import annotations
 
-import time
-from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -10,12 +8,12 @@ import bcrypt
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from .config import settings
 from .database import get_db
-from .models import Membership, Organization, User
+from .models import LoginAttempt, Membership, Organization, User
 from .tenancy import NOT_SET, SYSTEM, set_tenant
 
 ALGORITHM = "HS256"
@@ -114,24 +112,30 @@ def validate_password_strength(password: str) -> None:
 
 
 # --------------------------------------------------------------------------- login throttle
-_failed_logins: dict[str, list[float]] = defaultdict(list)
+# Stored in the database (table login_attempts) so limits hold across workers/instances and
+# survive restarts. Two independent limits: per account and per client IP.
+def _recent(db: Session, key: str) -> int:
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=settings.login_lockout_seconds)
+    return db.scalar(select(func.count()).select_from(LoginAttempt).where(
+        LoginAttempt.key == key, LoginAttempt.created_at >= cutoff)) or 0
 
 
-def check_login_allowed(key: str) -> None:
-    now = time.time()
-    window = settings.login_lockout_seconds
-    attempts = [t for t in _failed_logins[key] if now - t < window]
-    _failed_logins[key] = attempts
-    if len(attempts) >= settings.max_login_attempts:
+def check_login_allowed(db: Session, email: str, ip: str | None) -> None:
+    if _recent(db, f"account:{email}") >= settings.max_login_attempts or (
+            ip and _recent(db, f"ip:{ip}") >= settings.max_login_attempts_per_ip):
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Too many failed login attempts. Try again later.")
 
 
-def record_failed_login(key: str) -> None:
-    _failed_logins[key].append(time.time())
+def record_failed_login(db: Session, email: str, ip: str | None) -> None:
+    db.add(LoginAttempt(key=f"account:{email}"))
+    if ip:
+        db.add(LoginAttempt(key=f"ip:{ip}"))
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=max(settings.login_lockout_seconds, 3600))
+    db.execute(delete(LoginAttempt).where(LoginAttempt.created_at < cutoff))  # housekeeping
 
 
-def clear_failed_logins(key: str) -> None:
-    _failed_logins.pop(key, None)
+def clear_failed_logins(db: Session, email: str) -> None:
+    db.execute(delete(LoginAttempt).where(LoginAttempt.key == f"account:{email}"))
 
 
 # --------------------------------------------------------------------------- tokens

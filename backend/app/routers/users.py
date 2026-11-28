@@ -6,8 +6,12 @@ from sqlalchemy.orm import Session, selectinload
 
 from .. import audit
 from ..database import get_db
-from ..models import Membership, User
-from ..schemas import UserCreate, UserUpdate
+from ..accounts import expiry, invitation_link, new_token, reset_link, send_link
+from ..config import settings
+from ..models import Invitation, Membership, PasswordResetToken, User, utcnow
+from pydantic import BaseModel, Field
+
+from ..schemas import Role, UserCreate, UserUpdate
 from ..security import (
     ROLE_LABELS,
     ROLE_PERMISSIONS,
@@ -109,3 +113,84 @@ def update_user(user_id: int, body: UserUpdate, request: Request, ctx: Ctx = Dep
     db.commit()
     db.refresh(m)
     return member_out(m)
+
+
+# --------------------------------------------------------------------------- invitations
+class InvitationIn(BaseModel):
+    email: str = Field(pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$", max_length=255)
+    role: Role
+    region: str | None = None
+
+
+def _invitation_out(inv: Invitation) -> dict:
+    status = ("accepted" if inv.accepted_at else "revoked" if inv.revoked_at else
+              "expired" if _expired(inv.expires_at) else "pending")
+    return {"id": inv.id, "email": inv.email, "role": inv.role, "region": inv.region, "status": status,
+            "expires_at": inv.expires_at, "created_at": inv.created_at}
+
+
+def _expired(ts) -> bool:
+    from ..accounts import is_expired
+    return is_expired(ts)
+
+
+@router.get("/invitations", summary="Invitations of this organization")
+def list_invitations(ctx: Ctx = Depends(require("users:manage")), db: Session = Depends(get_db)):
+    return [_invitation_out(i) for i in db.scalars(select(Invitation).order_by(Invitation.created_at.desc())).all()]
+
+
+@router.post("/invitations", status_code=201, summary="Invite a person (returns a single-use link, shown once)")
+def create_invitation(body: InvitationIn, request: Request, ctx: Ctx = Depends(require("users:manage")),
+                      db: Session = Depends(get_db)):
+    email = body.email.strip().lower()
+    existing = db.scalar(select(User).where(func.lower(User.email) == email))
+    if existing and db.scalar(select(Membership).where(Membership.user_id == existing.id,
+                                                        Membership.organization_id == ctx.organization_id,
+                                                        Membership.is_active.is_(True))):
+        raise HTTPException(409, "This person is already an active member")
+    for old in db.scalars(select(Invitation).where(func.lower(Invitation.email) == email,
+                                                   Invitation.accepted_at.is_(None),
+                                                   Invitation.revoked_at.is_(None))).all():
+        old.revoked_at = utcnow()  # only one live invitation per address
+    raw, digest = new_token()
+    inv = Invitation(email=email, role=body.role, region=body.region, token_hash=digest,
+                     expires_at=expiry(settings.invitation_ttl_hours), created_by_id=ctx.id)
+    db.add(inv)
+    db.flush()
+    link = invitation_link(request, raw)
+    emailed = send_link(email, f"Invitation to {ctx.organization.name}", link)
+    audit.log(db, ctx, "member.invite", "invitation", inv.id, {"email": email, "role": body.role}, request)
+    db.commit()
+    return {**_invitation_out(inv), "invite_url": link, "emailed": emailed,
+            "note": "Share this link privately with the invitee. It is shown only once."}
+
+
+@router.delete("/invitations/{invitation_id}", status_code=204)
+def revoke_invitation(invitation_id: int, request: Request, ctx: Ctx = Depends(require("users:manage")),
+                      db: Session = Depends(get_db)):
+    inv = db.get(Invitation, invitation_id)
+    if inv is None:
+        raise HTTPException(404, "Invitation not found")
+    if inv.accepted_at is None and inv.revoked_at is None:
+        inv.revoked_at = utcnow()
+    audit.log(db, ctx, "member.invite_revoke", "invitation", inv.id, {"email": inv.email}, request)
+    db.commit()
+
+
+@router.post("/{user_id}/password-reset-link", summary="Create a single-use password reset link for a member")
+def password_reset_link(user_id: int, request: Request, ctx: Ctx = Depends(require("users:manage")),
+                        db: Session = Depends(get_db)):
+    m = _membership(db, ctx, user_id)
+    if db.scalar(select(func.count()).select_from(Membership).where(
+            Membership.user_id == user_id, Membership.organization_id != ctx.organization_id)):
+        raise HTTPException(403, "This account also belongs to another organization; its owner must reset it")
+    if m.user.is_platform_admin:
+        raise HTTPException(403, "Platform administrator accounts cannot be reset by an organization")
+    raw, digest = new_token()
+    db.add(PasswordResetToken(user_id=user_id, token_hash=digest, created_by_id=ctx.id,
+                              expires_at=expiry(settings.password_reset_ttl_hours)))
+    link = reset_link(request, raw)
+    emailed = send_link(m.user.email, "Password reset", link)
+    audit.log(db, ctx, "member.password_reset_link", "user", user_id, None, request)
+    db.commit()
+    return {"reset_url": link, "emailed": emailed, "expires_in_hours": settings.password_reset_ttl_hours}

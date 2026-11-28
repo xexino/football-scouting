@@ -195,6 +195,9 @@ def create_demo_users(db: Session, org: Organization) -> dict[str, User]:
 
 
 def seed(db: Session, n_players: int = 96) -> None:
+    from .config import settings
+    if settings.deployment_mode != "demo":
+        raise RuntimeError("Fictional demo data can only be loaded in a DEPLOYMENT_MODE=demo environment")
     set_tenant(db, SYSTEM)
     if db.scalar(select(Organization).where(Organization.slug == DEMO_ORG_SLUG)):
         return

@@ -14,7 +14,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 os.environ["DATABASE_URL"] = os.environ.get("TEST_DATABASE_URL") or f"sqlite:///{tempfile.mkdtemp()}/test.db"
-os.environ["SEED_SAMPLE_DATA"] = "true"
+os.environ["DEPLOYMENT_MODE"] = "demo"
+os.environ["MAX_LOGIN_ATTEMPTS_PER_IP"] = "10000"  # all test requests share one client IP
 os.environ.setdefault("DEMO_PASSWORD", "RajaDemo2026!")
 
 import pytest  # noqa: E402
@@ -103,9 +104,10 @@ def _sys():
 
 
 def create_org(client, slug: str, name: str, roles=B_ROLES, currency: str = "EUR", country: str = "Morocco"):
-    """Create an organization with one member per role; returns {"id", "H": headers by role}."""
+    """Create an organization with one member per role; returns {"id", "H": headers by role}.
+    Tests run in a DEPLOYMENT_MODE=demo environment, so test organizations are demo orgs."""
     with _sys() as db:
-        org = Organization(slug=slug, name=name, country=country, currency=currency, settings={})
+        org = Organization(slug=slug, name=name, country=country, currency=currency, settings={}, is_demo=True)
         db.add(org)
         db.flush()
         for role in roles:

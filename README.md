@@ -33,7 +33,7 @@ relying on it.
 > leagues, statistics and reports so the workflow can be explored. Everything fictional is
 > flagged `is_fictional`, carries the source `FICTIONAL SAMPLE DATA`, has names ending in
 > `-Fict` / `(fictional)` and is shown with a **FICTIONAL** badge. It is randomly generated
-> and must never inform a real decision. Disable it with `SEED_SAMPLE_DATA=false`.
+> and must never inform a real decision. Real clubs use a separate deployment with `DEPLOYMENT_MODE=customer`.
 
 ## Features
 

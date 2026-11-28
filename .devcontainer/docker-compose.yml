@@ -8,7 +8,7 @@ services:
       - ..:/workspaces/football-scouting:cached
     environment:
       DATABASE_URL: postgresql+psycopg://raja:raja@db:5432/raja_scout
-      SEED_SAMPLE_DATA: "true"
+      DEPLOYMENT_MODE: demo
     # The app server starts with the container; --reload picks up code edits.
     command: bash -c "cd /workspaces/football-scouting/backend && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     depends_on:

@@ -44,6 +44,7 @@
   const availBadge = a => h`<span class="badge ${a === 'available' || a === 'transfer_listed' || a === 'free_agent' ? 'b-green' : a === 'contract_expiring' || a === 'loan_possible' ? 'b-gold' : a === 'not_available' ? 'b-red' : 'b-grey'}">${label(a)}</span>`;
 
   function toast(msg, err = false) {
+    if (!msg) return;
     const t = document.createElement('div');
     t.className = 'toast' + (err ? ' err' : '');
     t.textContent = msg;
@@ -51,7 +52,18 @@
     setTimeout(() => t.remove(), err ? 6000 : 3000);
   }
 
-  async function api(path, { method = 'GET', body, form, raw: rawResp } = {}) {
+  // A view that finishes loading after the user has navigated elsewhere must not overwrite
+  // the newer page: every request remembers the route it was issued under, and responses
+  // arriving after a navigation abort the stale view (StaleView is swallowed by the router).
+  class StaleView extends Error { constructor() { super(''); } }
+  let routeSeq = 0;
+  async function api(path, opts = {}) {
+    const seq = routeSeq;
+    const out = await apiRaw(path, opts);
+    if (seq !== routeSeq) throw new StaleView();
+    return out;
+  }
+  async function apiRaw(path, { method = 'GET', body, form, raw: rawResp } = {}) {
     const headers = {};
     if (S.token) headers.Authorization = 'Bearer ' + S.token;
     let payload;
@@ -249,9 +261,12 @@
       <div class="field"><label for="email">Email</label><input id="email" name="username" type="email" autocomplete="username" required></div>
       <div class="field"><label for="pw">Password</label><input id="pw" name="password" type="password" autocomplete="current-password" required></div>
       <button class="btn primary" style="width:100%" type="submit">Sign in</button>
-      <p class="muted" style="font-size:12px;margin-top:16px">Demo accounts (fictional data): <code>director@raja-scout.local</code>, <code>head.scouting@…</code>, <code>analyst@…</code>, <code>video@…</code>, <code>scout.westafrica@…</code>, <code>admin@…</code> — password <code>RajaDemo2026!</code> unless changed by your administrator.</p>
+      <div id="demo-hint"></div>
       <p class="faint" style="font-size:11px;margin-top:14px;text-align:center">${NOT_AFFILIATED}</p>
     </form></div>`.s;
+    fetch('/api/public/config').then(r => r.json()).then(cfg => {
+      if (cfg.deployment_mode === 'demo' && cfg.demo_accounts) $('#demo-hint').innerHTML = h`<p class="muted" style="font-size:12px;margin-top:16px"><span class="badge b-amber">DEMO</span> Fictional data only. Accounts: ${cfg.demo_accounts.map((a, i) => h`${i ? ', ' : ''}<code>${a}</code>`)} — password <code>RajaDemo2026!</code> unless changed by the operator.</p>`.s;
+    }).catch(() => { });
     $('#login-form').onsubmit = async e => {
       e.preventDefault();
       const fd = new URLSearchParams(new FormData(e.target));
@@ -869,6 +884,42 @@
     };
   }
 
+  // ------------------------------------------------------------------ public account pages
+  function publicCard(inner) {
+    $('#app').innerHTML = h`<div class="login-wrap"><div class="login-card"><div class="brand">${raw(shield)}<div class="brand-name" style="font-size:18px">RAJA SCOUT INTELLIGENCE</div></div>${inner}<p class="faint" style="font-size:11px;margin-top:14px;text-align:center">${NOT_AFFILIATED}</p></div></div>`.s;
+  }
+  async function inviteView(token) {
+    let inv;
+    try { inv = await api(`/api/auth/invitations/${encodeURIComponent(token)}`); }
+    catch (e) { return publicCard(h`<div class="notice err">${e.message}</div><a class="btn" href="#/login">Go to sign in</a>`); }
+    publicCard(h`<h2 style="text-align:center">Join ${inv.organization}</h2>
+      <p class="muted" style="text-align:center">Invitation for <strong>${inv.email}</strong> as ${label(inv.role)}.</p>
+      <form id="acc">${inv.existing_account ? h`<div class="notice info">You already have an account. Confirm with your current password to add this organization.</div>`
+        : h`<div class="field"><label>Full name</label><input name="full_name" required minlength="2"></div>`}
+      <div class="field"><label>${inv.existing_account ? 'Current password' : 'Choose a password (≥10 characters, letters and digits)'}</label><input name="password" type="password" required autocomplete="${inv.existing_account ? 'current-password' : 'new-password'}"></div>
+      <button class="btn primary" style="width:100%" type="submit">${inv.existing_account ? 'Join organization' : 'Create account'}</button></form>`);
+    $('#acc').onsubmit = async e => {
+      e.preventDefault();
+      try {
+        const r = await api('/api/auth/invitations/accept', { method: 'POST', body: { token, ...clean(formData(e.target)) } });
+        setToken(r.access_token); S.user = null; location.hash = '#/dashboard';
+      } catch (err) { toast(err.message, true); }
+    };
+  }
+  function resetView(token) {
+    publicCard(h`<h2 style="text-align:center">Set a new password</h2><form id="rst"><div class="field"><label>New password (≥10 characters, letters and digits)</label><input name="new_password" type="password" required autocomplete="new-password"></div><button class="btn primary" style="width:100%" type="submit">Save password</button></form>`);
+    $('#rst').onsubmit = async e => {
+      e.preventDefault();
+      try { await api('/api/auth/password-reset', { method: 'POST', body: { token, ...formData(e.target) } }); toast('Password updated — please sign in'); logout(); }
+      catch (err) { toast(err.message, true); }
+    };
+  }
+  function showLink(title, url, note) {
+    modal(title, h`<p class="muted">${note}</p><div class="field"><input id="link-out" readonly value="${url}"></div>`,
+      { foot: h`<button type="button" class="btn primary" id="copy-link" style="margin-right:auto">Copy link</button>` });
+    $('#copy-link').onclick = async () => { try { await navigator.clipboard.writeText(url); toast('Link copied'); } catch (_) { $('#link-out').select(); } };
+  }
+
   // ------------------------------------------------------------------ organization settings
   async function organizationView() {
     loading('organization', 'Organization');
@@ -915,15 +966,17 @@
   // ------------------------------------------------------------------ admin
   async function adminView() {
     loading('admin', 'Administration');
-    const [users, roles, logs, budgets] = await Promise.all([
+    const [users, roles, invites, logs, budgets] = await Promise.all([
       can('users:manage') ? api('/api/users') : null, api('/api/users/roles'),
+      can('users:manage') ? api('/api/users/invitations') : null,
       can('audit:read') ? api('/api/admin/audit-logs?limit=150') : null, can('financials:read') ? api('/api/budgets') : null]);
     const M = S.meta;
     shell('admin', 'Administration', h`<div class="grid g2">
-      ${users ? h`<div class="card span2" style="grid-column:1/-1"><div class="card-head"><h3>Users</h3><button class="btn sm primary" id="new-user">+ New user</button></div><div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Region</th><th>Status</th><th>Last login</th><th></th></tr></thead><tbody>
-        ${users.map(u => h`<tr><td>${u.full_name}</td><td class="muted">${u.email}</td><td>${M.roles[u.role]}</td><td>${u.region || '—'}</td><td>${u.is_active ? h`<span class="badge b-green">active</span>` : h`<span class="badge b-red">disabled</span>`}</td><td class="faint">${fmtDateTime(u.last_login_at)}</td><td><button class="btn sm edit-user" data-id="${u.id}">Edit</button></td></tr>`)}</tbody></table></div></div>` : ''}
+      ${users ? h`<div class="card span2" style="grid-column:1/-1"><div class="card-head"><h3>Members</h3><div class="row"><button class="btn sm primary" id="invite-user">+ Invite member</button><button class="btn sm" id="new-user" title="Create an account with a temporary password">Create directly</button></div></div><div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Region</th><th>Status</th><th>Last login</th><th></th></tr></thead><tbody>
+        ${users.map(u => h`<tr><td>${u.full_name}</td><td class="muted">${u.email}</td><td>${M.roles[u.role]}</td><td>${u.region || '—'}</td><td>${u.is_active ? h`<span class="badge b-green">active</span>` : h`<span class="badge b-red">disabled</span>`}</td><td class="faint">${fmtDateTime(u.last_login_at)}</td><td><button class="btn sm edit-user" data-id="${u.id}">Edit</button> <button class="btn sm ghost reset-user" data-id="${u.id}">Reset link</button></td></tr>`)}</tbody></table></div></div>` : ''}
+      ${invites ? h`<div class="card span2" style="grid-column:1/-1"><h3>Invitations</h3><div id="invites"></div></div>` : ''}
       ${budgets ? h`<div class="card"><div class="card-head"><h3>Recruitment budgets</h3>${can('budget:manage') ? h`<button class="btn sm" id="budget">Set budget</button>` : ''}</div><div class="table-wrap"><table><thead><tr><th>Season</th><th class="num">Transfer</th><th class="num">Wages</th><th>Notes</th></tr></thead><tbody>${budgets.map(b => h`<tr><td>${b.season}</td><td class="num">${fmtMoney(b.transfer_budget)}</td><td class="num">${fmtMoney(b.wage_budget)}</td><td class="muted">${b.notes || ''}</td></tr>`)}</tbody></table></div></div>` : ''}
-      <div class="card"><h3>Backup & export</h3><p class="muted">Logical JSON export of all tables (password hashes excluded). For full database backups use <code>scripts/backup.sh</code> (pg_dump) — see docs/DEPLOYMENT.md.</p>
+      <div class="card"><h3>Backup & export</h3><p class="muted">JSON export of all of this organization's data (password hashes excluded). For full database backups use <code>scripts/backup.sh</code> (pg_dump) — see docs/DEPLOYMENT.md.</p>
         <div class="row">${can('backup:run') ? h`<button class="btn primary" id="exp">Download full export (JSON)</button>` : ''}<button class="btn" id="exp-csv">Players CSV</button></div></div>
       <div class="card span2" style="grid-column:1/-1"><h3>Role permissions</h3><div class="table-wrap"><table><thead><tr><th>Permission</th>${roles.map(r => h`<th>${r.label}</th>`)}</tr></thead><tbody>
         ${[...new Set(roles.flatMap(r => r.permissions))].sort().map(p => h`<tr><td><code>${p}</code></td>${roles.map(r => h`<td>${r.permissions.includes(p) ? h`<span style="color:var(--green)">✓</span>` : h`<span class="faint">·</span>`}</td>`)}</tr>`)}</tbody></table></div></div>
@@ -940,6 +993,19 @@
       ${u ? h`<label class="check"><input type="checkbox" name="is_active" ${u.is_active ? raw('checked') : ''}> Active</label>` : ''}`,
       { onSubmit: async f => { const b = formData(f); if (u) { if (!b.password) delete b.password; await api(`/api/users/${u.id}`, { method: 'PATCH', body: b }); } else await api('/api/users', { method: 'POST', body: clean(b) }); toast('User saved'); adminView(); } });
     if ($('#new-user')) $('#new-user').onclick = () => userForm(null);
+    if ($('#invite-user')) $('#invite-user').onclick = () => modal('Invite a member', h`<p class="muted">Creates a single-use link (valid 7 days). The person chooses their own password.</p>
+      <div class="form-grid"><div class="field"><label>Email *</label><input name="email" type="email" required></div><div class="field"><label>Role *</label><select name="role">${Object.entries(M.roles).map(([k, t]) => h`<option value="${k}">${t}</option>`)}</select></div><div class="field"><label>Region</label><input name="region"></div></div>`,
+      { submitLabel: 'Create invitation', onSubmit: async f => { const r = await api('/api/users/invitations', { method: 'POST', body: clean(formData(f)) }); showLink('Invitation link', r.invite_url, `Send this link privately to ${r.email}. It is shown only once and expires ${fmtDateTime(r.expires_at)}.`); adminInvites(); return true; } });
+    $$('.reset-user').forEach(b => b.onclick = async () => {
+      try { const r = await api(`/api/users/${b.dataset.id}/password-reset-link`, { method: 'POST' }); showLink('Password reset link', r.reset_url, `Single use, valid ${r.expires_in_hours} hours. Existing sessions are signed out when it is used.`); }
+      catch (e) { toast(e.message, true); }
+    });
+    const adminInvites = async () => {
+      const list = await api('/api/users/invitations'); const el = $('#invites'); if (!el) return;
+      el.innerHTML = (list.length ? h`<div class="table-wrap"><table><thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Expires</th><th></th></tr></thead><tbody>${list.map(i => h`<tr><td>${i.email}</td><td>${M.roles[i.role]}</td><td><span class="badge ${i.status === 'pending' ? 'b-blue' : i.status === 'accepted' ? 'b-green' : 'b-grey'}">${i.status}</span></td><td class="faint">${fmtDateTime(i.expires_at)}</td><td>${i.status === 'pending' ? h`<button class="btn sm ghost rev-inv" data-id="${i.id}">Revoke</button>` : ''}</td></tr>`)}</tbody></table></div>` : h`<div class="empty">No invitations yet.</div>`).s;
+      $$('.rev-inv', el).forEach(b => b.onclick = async () => { await api(`/api/users/invitations/${b.dataset.id}`, { method: 'DELETE' }); adminInvites(); });
+    };
+    if (invites) adminInvites();
     $$('.edit-user').forEach(b => b.onclick = () => userForm(users.find(u => u.id === Number(b.dataset.id))));
   }
 
@@ -964,6 +1030,9 @@
   async function route() {
     $('#modal-root').innerHTML = '';
     const hash = location.hash || '#/dashboard';
+    routeSeq++;  // responses to requests issued by the previous view will be discarded
+    const pub = hash.match(/^#\/(invite|reset)\/([A-Za-z0-9_-]+)$/);
+    if (pub) return pub[1] === 'invite' ? inviteView(pub[2]) : resetView(pub[2]);
     if (!S.token) { if (hash !== '#/login') { location.hash = '#/login'; return; } return loginView(); }
     if (!S.user) {
       try { S.user = await api('/api/auth/me'); S.meta = await api('/api/meta'); applyBranding(); }
@@ -973,7 +1042,7 @@
     for (const [re, fn] of ROUTES) {
       const m = hash.match(re);
       if (m) {
-        try { await fn(m); } catch (e) { if ($('#content')) $('#content').innerHTML = h`<div class="notice err">${e.message}</div>`.s; else toast(e.message, true); }
+        try { await fn(m); } catch (e) { if (e instanceof StaleView) return; if ($('#content')) $('#content').innerHTML = h`<div class="notice err">${e.message}</div>`.s; else toast(e.message, true); }
         window.scrollTo(0, 0);
         return;
       }

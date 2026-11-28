@@ -12,9 +12,10 @@ cp .env.example .env
 #   RAJA_ENV=production
 #   SECRET_KEY=<python -c "import secrets;print(secrets.token_urlsafe(48))">
 #   POSTGRES_PASSWORD=<strong password>
-#   SEED_SAMPLE_DATA=false
+#   DEPLOYMENT_MODE=customer
 docker compose up -d --build
-docker compose exec app python -m app.cli create-user admin@club.ma "Administrator" administrator
+docker compose exec app python -m app.cli create-org my-club "My Club" Morocco MAD
+docker compose exec app python -m app.cli create-user admin@club.ma "Administrator" administrator my-club
 ```
 
 The database is stored in the `pgdata` volume. Do not expose port 5432 publicly.
@@ -69,7 +70,9 @@ data-protection law (Loi 09-08, CNDP) since the database contains personal data.
 
 ## Production checklist
 
-- [ ] `RAJA_ENV=production`, strong unique `SECRET_KEY`, `SEED_SAMPLE_DATA=false`
+- [ ] `RAJA_ENV=production`, strong unique `SECRET_KEY`, `DEPLOYMENT_MODE=customer`, `PUBLIC_BASE_URL` set
+- [ ] Demo and customer deployments use **separate databases** (the app refuses to mix them)
+- [ ] Every backup verified with `scripts/verify_backup.sh` (at least weekly)
 - [ ] HTTPS only; database not reachable from the internet
 - [ ] Demo accounts absent; every staff member has a personal account with the least-privileged role
 - [ ] Automated backups scheduled and a restore tested
@@ -102,6 +105,6 @@ pip install -r backend/requirements.txt
 systemctl restart raja-scout
 ```
 
-Tables are created automatically at startup. The current release does not ship schema
-migrations; before changing models in a live deployment add Alembic (see ROADMAP.md) and
-always take a backup first.
+Schema changes are Alembic migrations, applied automatically at startup
+(`alembic upgrade head`); a database created before migrations existed is detected and
+adopted. Always take (and verify) a backup before upgrading.

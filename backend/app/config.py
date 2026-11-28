@@ -25,7 +25,13 @@ class Settings:
     token_expire_minutes: int = field(
         default_factory=lambda: int(os.getenv("TOKEN_EXPIRE_MINUTES", "480"))
     )
-    seed_sample_data: bool = field(default_factory=lambda: _bool("SEED_SAMPLE_DATA", True))
+    # "demo": public demo with fictional data only (seeded, demo accounts shown on login).
+    # "customer": real customer data; demo data is never loaded. See docs/saas/04_STAGE3_PRODUCTION.md
+    deployment_mode: str = field(default_factory=lambda: os.getenv("DEPLOYMENT_MODE", ""))
+    expose_api_docs: bool = field(default_factory=lambda: _bool("EXPOSE_API_DOCS", True))
+    public_base_url: str = field(default_factory=lambda: os.getenv("PUBLIC_BASE_URL", "").rstrip("/"))
+    invitation_ttl_hours: int = field(default_factory=lambda: int(os.getenv("INVITATION_TTL_HOURS", "168")))
+    password_reset_ttl_hours: int = field(default_factory=lambda: int(os.getenv("PASSWORD_RESET_TTL_HOURS", "24")))
     cors_origins: list[str] = field(
         default_factory=lambda: [o for o in os.getenv("CORS_ORIGINS", "").split(",") if o]
     )
@@ -43,6 +49,9 @@ class Settings:
     login_lockout_seconds: int = field(
         default_factory=lambda: int(os.getenv("LOGIN_LOCKOUT_SECONDS", "900"))
     )
+    max_login_attempts_per_ip: int = field(
+        default_factory=lambda: int(os.getenv("MAX_LOGIN_ATTEMPTS_PER_IP", "30"))
+    )
 
     # Run table creation / demo seeding inside the web process. Disable when a separate
     # bootstrap step runs first (Docker image), so several workers don't race.
@@ -53,6 +62,12 @@ class Settings:
         for prefix in ("postgres://", "postgresql://"):
             if self.database_url.startswith(prefix):
                 self.database_url = "postgresql+psycopg://" + self.database_url[len(prefix):]
+        if not self.deployment_mode:
+            self.deployment_mode = "customer" if self.env == "production" else "demo"
+        if self.deployment_mode not in ("demo", "customer"):
+            raise RuntimeError("DEPLOYMENT_MODE must be 'demo' or 'customer'")
+        if self.env == "production" and self.database_url.startswith("sqlite"):
+            raise RuntimeError("SQLite is not supported in production; use PostgreSQL")
         if not self.secret_key:
             if self.env == "production":
                 raise RuntimeError("SECRET_KEY must be set in production")

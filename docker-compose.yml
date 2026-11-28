@@ -24,7 +24,8 @@ services:
       DATABASE_URL: postgresql+psycopg://raja:${POSTGRES_PASSWORD:-raja}@db:5432/raja_scout
       RAJA_ENV: ${RAJA_ENV:-development}
       SECRET_KEY: ${SECRET_KEY:-}
-      SEED_SAMPLE_DATA: ${SEED_SAMPLE_DATA:-true}
+      DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-demo}   # "customer" for real club data
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
     ports:
       - "8000:8000"
 
