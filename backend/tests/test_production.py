@@ -5,7 +5,7 @@ from sqlalchemy import delete, func, select
 from app import main as app_main
 from app.config import Settings, settings
 from app.models import LoginAttempt, Organization
-from conftest import _sys
+from conftest import _sys, demo_only_database
 
 
 def test_public_config_shows_demo_accounts_only_in_demo_mode(client, monkeypatch):
@@ -26,6 +26,11 @@ def test_customer_deployment_refuses_demo_data(client, monkeypatch):
 
 
 def test_demo_deployment_refuses_customer_data(client):
+    with demo_only_database():
+        _check_refuses_customer_data()
+
+
+def _check_refuses_customer_data():
     with _sys() as db:
         org = Organization(slug="real-customer", name="Real Customer", settings={}, is_demo=False)
         db.add(org)

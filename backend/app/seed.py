@@ -199,7 +199,9 @@ def seed(db: Session, n_players: int = 96) -> None:
     if settings.deployment_mode != "demo":
         raise RuntimeError("Fictional demo data can only be loaded in a DEPLOYMENT_MODE=demo environment")
     set_tenant(db, SYSTEM)
-    if db.scalar(select(Organization).where(Organization.slug == DEMO_ORG_SLUG)):
+    # Seed only a brand-new database. An upgraded installation (e.g. a pre-SaaS demo migrated
+    # into a "legacy organization") already has its data and must not get a second demo org.
+    if db.scalar(select(Organization.id).limit(1)) is not None:
         return
     org = Organization(slug=DEMO_ORG_SLUG, name="Demo FC (fictional)", short_name="Demo FC", country="Morocco",
                        primary_language="en", currency="EUR", is_demo=True,

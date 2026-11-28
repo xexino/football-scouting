@@ -92,6 +92,14 @@ def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("utf-8")
 
 
+_DUMMY_HASH = bcrypt.hashpw(b"timing-equalizer", bcrypt.gensalt(rounds=12)).decode()
+
+
+def burn_password_check(password: str) -> None:
+    """Spend the same time as a real check when the account does not exist (no user enumeration by timing)."""
+    verify_password(password, _DUMMY_HASH)
+
+
 def verify_password(password: str, hashed: str) -> bool:
     try:
         return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
@@ -107,6 +115,8 @@ def validate_password_strength(password: str) -> None:
         problems.append("a digit")
     if not any(c.isalpha() for c in password):
         problems.append("a letter")
+    if len(password.encode("utf-8")) > 72:  # bcrypt limit; longer values would be silently truncated / error
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Password must be at most 72 bytes")
     if problems:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Password must contain " + ", ".join(problems))
 

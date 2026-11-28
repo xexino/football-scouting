@@ -38,6 +38,8 @@ manager. The important ones:
 | `SECRET_KEY` | random per start (dev) | JWT signing key — **required** in production, ≥32 chars |
 | `DEPLOYMENT_MODE` | `demo` (dev) / `customer` (production) | `demo`: fictional demo organization + demo accounts; refuses customer data. `customer`: real clubs; never loads demo data |
 | `PUBLIC_BASE_URL` | request URL | Base URL used in invitation and password-reset links |
+| `TRUSTED_PROXY_HOPS` | `0` | Reverse proxies you control in front of the app; the client IP is taken from that position in `X-Forwarded-For` (never the client-supplied left-most entry) |
+| `EXPOSE_API_DOCS` | on in development, off in production | Serve `/docs`, `/redoc`, `/openapi.json` |
 | `DEMO_PASSWORD` | `RajaDemo2026!` | Demo account password |
 | `TOKEN_EXPIRE_MINUTES` | `480` | Session length |
 | `MIN_MINUTES_RELIABLE` | `900` | Below this, per-90 figures are flagged as a small sample |

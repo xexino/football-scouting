@@ -29,6 +29,7 @@ from ..models import (
     PIPELINE_STAGES,
     Club,
     MatchReport,
+    Membership,
     PipelineEntry,
     PipelineEvent,
     Player,
@@ -86,6 +87,14 @@ def entry_out(e: PipelineEntry, viewer: User, with_history: bool = False) -> dic
             "user_id": ev.user_id, "user_name": ev.user.full_name if ev.user else None, "created_at": ev.created_at,
         } for ev in e.events]
     return out
+
+
+def _require_member(db: Session, ctx, user_id: int) -> None:
+    """Assignments may only point at active members of the same organization."""
+    ok = db.scalar(select(Membership.id).where(Membership.user_id == user_id, Membership.is_active.is_(True),
+                                               Membership.organization_id == ctx.organization_id))
+    if ok is None:
+        raise HTTPException(422, "The assigned scout must be an active member of your organization")
 
 
 def check_transition(db: Session, user: User, e: PipelineEntry, to: str) -> list[str]:
@@ -160,8 +169,8 @@ def add(body: PipelineCreate, request: Request, user: Ctx = Depends(require("pip
         raise HTTPException(404, "Player not found")
     if db.scalar(select(PipelineEntry).where(PipelineEntry.player_id == p.id)):
         raise HTTPException(409, "Player is already in the pipeline")
-    if body.assigned_scout_id and db.get(User, body.assigned_scout_id) is None:
-        raise HTTPException(422, "Unknown scout")
+    if body.assigned_scout_id:
+        _require_member(db, user, body.assigned_scout_id)
     e = PipelineEntry(player_id=p.id, stage="identified", priority=body.priority,
                       target_position=body.target_position or p.primary_position,
                       assigned_scout_id=body.assigned_scout_id, created_by_id=user.id)
@@ -219,8 +228,8 @@ def update(entry_id: int, body: PipelineUpdate, request: Request, user: Ctx = De
            db: Session = Depends(get_db)):
     e = _entry(db, entry_id)
     changes = body.model_dump(exclude_unset=True)
-    if "assigned_scout_id" in changes and changes["assigned_scout_id"] and db.get(User, changes["assigned_scout_id"]) is None:
-        raise HTTPException(422, "Unknown scout")
+    if changes.get("assigned_scout_id"):
+        _require_member(db, user, changes["assigned_scout_id"])
     for k, v in changes.items():
         setattr(e, k, v)
     audit.log(db, user, "pipeline.update", "pipeline_entry", e.id, changes, request)

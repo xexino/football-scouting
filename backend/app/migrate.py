@@ -27,8 +27,8 @@ def alembic_config(connection=None) -> Config:
     return cfg
 
 
-def migrate_database() -> str:
-    with engine.begin() as conn:
+def migrate_database(eng=None) -> str:
+    with (eng or engine).begin() as conn:
         cfg = alembic_config(conn)
         tables = set(inspect(conn).get_table_names())
         if conn.dialect.name == "sqlite":

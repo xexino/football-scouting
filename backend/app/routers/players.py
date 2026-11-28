@@ -247,7 +247,7 @@ def export_csv(request: Request, include_fictional: bool = True, user: Ctx = Dep
     for p in players:
         d = player_out(p, user, assess.get(p.id))
         d["secondary_positions"] = "|".join(d["secondary_positions"])
-        w.writerow([d.get(c) if d.get(c) is not None else "" for c in cols])
+        w.writerow([_csv_safe(d.get(c)) for c in cols])
     audit.log(db, user, "player.export_csv", "player", None, {"count": len(players)}, request)
     db.commit()
     buf.seek(0)
@@ -268,7 +268,7 @@ def create_player(body: PlayerCreate, request: Request, user: Ctx = Depends(requ
         if src is None:
             raise HTTPException(422, "Unknown data source")
         data["is_fictional"] = src.is_fictional
-    if data.get("current_club_id") and db.get(Club, data["current_club_id"]) is None:
+    if data.get("current_club_id") is not None and db.get(Club, data["current_club_id"]) is None:
         raise HTTPException(422, "Unknown club")
     enforce_player_limit(db, user.organization)
     player = Player(**data, created_by_id=user.id)  # private to this organization (tenant guard)
@@ -297,6 +297,13 @@ def update_player(player_id: int, body: PlayerUpdate, request: Request, user: Ct
     if not has_permission(user, "financials:read") and any(f in changes for f in FINANCIAL_FIELDS):
         raise HTTPException(403, "Your role cannot edit financial information")
     private = {k: changes.pop(k) for k in list(changes) if k in ASSESSMENT_FIELDS}
+    if changes.get("current_club_id") is not None and db.get(Club, changes["current_club_id"]) is None:
+        raise HTTPException(422, "Unknown club")  # tenant-scoped lookup: another organization's club is "unknown"
+    if changes.get("data_source_id") is not None:
+        src = db.get(DataSource, changes["data_source_id"])
+        if src is None:
+            raise HTTPException(422, "Unknown data source")
+        changes["is_fictional"] = src.is_fictional
     if changes and p.organization_id is None:
         raise HTTPException(403, "This is a shared reference player: identity fields are maintained by the "
                                  "platform. You can edit your organization's private assessment fields.")
@@ -391,3 +398,12 @@ __all__ = ["router", "upsert_stats", "STAT_FIELDS"]
 def _fee(assess: dict, player_id: int):
     a = assess.get(player_id)
     return a.estimated_fee if a else None
+
+
+def _csv_safe(value):
+    """Neutralise spreadsheet formula injection (values starting with = + - @ tab CR)."""
+    if value is None:
+        return ""
+    if isinstance(value, str) and value[:1] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + value
+    return value

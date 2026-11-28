@@ -72,6 +72,8 @@ data-protection law (Loi 09-08, CNDP) since the database contains personal data.
 
 - [ ] `RAJA_ENV=production`, strong unique `SECRET_KEY`, `DEPLOYMENT_MODE=customer`, `PUBLIC_BASE_URL` set
 - [ ] Demo and customer deployments use **separate databases** (the app refuses to mix them)
+- [ ] Client IP behind proxies: `TRUSTED_PROXY_HOPS` = number of proxies you control (1 on most PaaS, 1 behind a single nginx), `FORWARDED_ALLOW_IPS` = proxy address (or `*` only together with `TRUSTED_PROXY_HOPS≥1`) — otherwise login throttling and audit IPs can be spoofed
+- [ ] `POSTGRES_PASSWORD` set (docker compose refuses to start without it); `EXPOSE_API_DOCS` left unset (hidden in production)
 - [ ] Every backup verified with `scripts/verify_backup.sh` (at least weekly)
 - [ ] HTTPS only; database not reachable from the internet
 - [ ] Demo accounts absent; every staff member has a personal account with the least-privileged role

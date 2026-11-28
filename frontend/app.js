@@ -842,7 +842,7 @@
     const M = S.meta;
     const secs = Object.entries(r.sections).filter(([k]) => !k.startsWith('_'));
     const meta = r.sections._meta || {};
-    const actions = h`<a class="btn" href="#/players/${r.player_id}">Player</a><button class="btn" id="md">Export .md</button><button class="btn" onclick="window.print()">Print</button>${editable && can('reports:finalize') ? h`<button class="btn gold" id="fin">Finalise</button>` : ''}${can('reports:write') && (r.status !== 'final' || can('users:manage')) ? h`<button class="btn danger" id="del">Delete</button>` : ''}`;
+    const actions = h`<a class="btn" href="#/players/${r.player_id}">Player</a><button class="btn" id="md">Export .md</button><button class="btn" id="print-btn">Print</button>${editable && can('reports:finalize') ? h`<button class="btn gold" id="fin">Finalise</button>` : ''}${can('reports:write') && (r.status !== 'final' || can('users:manage')) ? h`<button class="btn danger" id="del">Delete</button>` : ''}`;
     shell('reports', r.title, h`
       ${meta.is_fictional ? h`<div class="fict-banner"><strong>FICTIONAL SAMPLE DATA.</strong> This report is a demonstration and must not inform real decisions.</div>` : ''}
       <div class="card"><div class="row" style="justify-content:space-between"><div><h1>${r.title}</h1><div class="muted">${r.author_name || '—'} · created ${fmtDateTime(r.created_at)} · updated ${fmtDateTime(r.updated_at)} ${meta.season ? h`· season ${meta.season}` : ''}</div></div>
@@ -858,6 +858,7 @@
     const save = async body => { try { await api(`/api/reports/${id}`, { method: 'PATCH', body }); toast('Report saved'); reportDetailView(id); } catch (e) { toast(e.message, true); } };
     if ($('#hdr') && editable) $('#hdr').onsubmit = e => { e.preventDefault(); const b = formData(e.target); save({ recommendation: b.recommendation, potential_rating: b.potential_rating, risk_level: b.risk_level }); };
     $('#md').onclick = () => download(`/api/reports/${id}/export.md`, `report_${id}.md`);
+    $('#print-btn').onclick = () => window.print();
     if ($('#fin')) $('#fin').onclick = async () => { if (!confirm('Finalise this report? It will be locked.')) return; try { await api(`/api/reports/${id}/finalize`, { method: 'POST' }); toast('Report finalised'); reportDetailView(id); } catch (e) { toast(e.message, true); } };
     if ($('#del')) $('#del').onclick = async () => { if (!confirm('Delete this report?')) return; try { await api(`/api/reports/${id}`, { method: 'DELETE' }); location.hash = '#/reports'; } catch (e) { toast(e.message, true); } };
     $$('.add-item').forEach(b => b.onclick = () => modal('Add scout assessment', h`<p class="muted">This text will be labelled as <span class="badge b-blue">SCOUT</span> opinion and attributed to you.</p><div class="field"><label>Assessment</label><textarea name="text" required style="min-height:120px"></textarea></div><div class="field"><label>Evidence basis (e.g. "3 full matches + live vs X")</label><input name="basis"></div>`,

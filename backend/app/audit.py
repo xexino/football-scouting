@@ -17,9 +17,8 @@ def log(
     request: Request | None = None,
     organization_id: int | None = None,
 ) -> None:
-    ip = None
-    if request is not None and request.client is not None:
-        ip = request.headers.get("x-forwarded-for", request.client.host)
+    from .netutil import client_ip
+    ip = client_ip(request) if request is not None else None
     org_id = organization_id if organization_id is not None else getattr(user, "organization_id", None)
     db.add(
         AuditLog(

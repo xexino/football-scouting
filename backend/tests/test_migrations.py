@@ -83,6 +83,8 @@ def test_legacy_single_club_data_is_migrated(engine):
             assert c.execute(text(f"SELECT count(*) FROM {t} WHERE organization_id IS DISTINCT FROM :o"),
                              {"o": org.id}).scalar() == 0, t
         assert c.execute(text("SELECT transfer_budget FROM recruitment_budgets")).scalar() == 5000000
+        sub = c.execute(text("SELECT plan, status FROM subscriptions WHERE organization_id = :o"), {"o": org.id}).one()
+        assert tuple(sub) == ("enterprise", "active")  # live customer grandfathered, never locked out
         diff = compare_metadata(MigrationContext.configure(c, opts={"compare_type": True}), Base.metadata)
         assert diff == [], diff
 
@@ -92,3 +94,19 @@ def test_legacy_single_club_data_is_migrated(engine):
         assert tuple(p) == (1500000, "Agent X", "available")
         assert c.execute(text("SELECT role FROM users WHERE id = 1")).scalar() == "sporting_director"
         assert c.execute(text("SELECT transfer_budget_eur FROM recruitment_budgets")).scalar() == 5000000
+
+
+def test_database_created_before_migrations_is_adopted(engine):
+    """A database created by the pre-Alembic application (tables, no alembic_version) is
+    detected, stamped 0001_legacy and upgraded by the normal startup path."""
+    from app.migrate import migrate_database
+    _run(engine, command.upgrade, "0001_legacy")
+    with engine.begin() as c:
+        c.execute(text("DROP TABLE alembic_version"))
+        c.execute(text("INSERT INTO users (id, email, full_name, role, hashed_password, is_active, created_at) "
+                       "VALUES (1, 'a@b.ma', 'A', 'administrator', 'x', true, now())"))
+    assert migrate_database(engine) == "postgresql:upgraded"
+    with engine.connect() as c:
+        assert c.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0004_subscriptions"
+        assert c.execute(text("SELECT role FROM memberships WHERE user_id = 1")).scalar() == "administrator"
+    assert migrate_database(engine) == "postgresql:upgraded"  # idempotent

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from .. import audit
 from ..database import get_db
-from ..accounts import expiry, invitation_link, new_token, reset_link, send_link
+from ..accounts import expiry, invalidate_reset_tokens, invitation_link, new_token, reset_link, send_link
 from ..config import settings
 from ..subscriptions import enforce_seat_limit
 from ..models import Invitation, Membership, PasswordResetToken, User, utcnow
@@ -68,18 +68,16 @@ def create_user(body: UserCreate, request: Request, ctx: Ctx = Depends(require("
         user = User(email=email, full_name=body.full_name, hashed_password=hash_password(body.password))
         db.add(user)
         db.flush()
-        created = True
     else:
-        # Existing account (e.g. a consultant working for several clubs): we only add a
-        # membership; we never change the credentials of an account we do not own.
-        if db.scalar(select(Membership).where(Membership.user_id == user.id,
-                                              Membership.organization_id == ctx.organization_id)):
-            raise HTTPException(409, "This user is already a member of the organization")
-        created = False
+        # An account owned by someone else (possibly another organization's staff). Adding it
+        # directly would attach a person without their consent and disclose their name, so the
+        # owner must accept an invitation with their own password instead.
+        raise HTTPException(409, "An account with this email already exists. Send an invitation instead; "
+                                 "the person accepts it with their own password.")
     m = Membership(user_id=user.id, organization_id=ctx.organization_id, role=body.role, region=body.region)
     db.add(m)
     db.flush()
-    audit.log(db, ctx, "member.add", "user", user.id, {"email": email, "role": body.role, "new_account": created}, request)
+    audit.log(db, ctx, "member.add", "user", user.id, {"email": email, "role": body.role}, request)
     db.commit()
     db.refresh(m)
     return member_out(m)
@@ -191,6 +189,7 @@ def password_reset_link(user_id: int, request: Request, ctx: Ctx = Depends(requi
         raise HTTPException(403, "This account also belongs to another organization; its owner must reset it")
     if m.user.is_platform_admin:
         raise HTTPException(403, "Platform administrator accounts cannot be reset by an organization")
+    invalidate_reset_tokens(db, user_id)  # only the newest link is valid
     raw, digest = new_token()
     db.add(PasswordResetToken(user_id=user_id, token_hash=digest, created_by_id=ctx.id,
                               expires_at=expiry(settings.password_reset_ttl_hours)))

@@ -28,7 +28,11 @@ class Settings:
     # "demo": public demo with fictional data only (seeded, demo accounts shown on login).
     # "customer": real customer data; demo data is never loaded. See docs/saas/04_STAGE3_PRODUCTION.md
     deployment_mode: str = field(default_factory=lambda: os.getenv("DEPLOYMENT_MODE", ""))
-    expose_api_docs: bool = field(default_factory=lambda: _bool("EXPOSE_API_DOCS", True))
+    # API docs are hidden in production unless explicitly enabled.
+    expose_api_docs: bool = field(default_factory=lambda: _bool("EXPOSE_API_DOCS",
+                                                                os.getenv("RAJA_ENV", "development") != "production"))
+    # Number of reverse proxies under our control in front of the app (see app/netutil.py).
+    trusted_proxy_hops: int = field(default_factory=lambda: int(os.getenv("TRUSTED_PROXY_HOPS", "0")))
     public_base_url: str = field(default_factory=lambda: os.getenv("PUBLIC_BASE_URL", "").rstrip("/"))
     invitation_ttl_hours: int = field(default_factory=lambda: int(os.getenv("INVITATION_TTL_HOURS", "168")))
     password_reset_ttl_hours: int = field(default_factory=lambda: int(os.getenv("PASSWORD_RESET_TTL_HOURS", "24")))
@@ -68,6 +72,8 @@ class Settings:
             raise RuntimeError("DEPLOYMENT_MODE must be 'demo' or 'customer'")
         if self.env == "production" and self.database_url.startswith("sqlite"):
             raise RuntimeError("SQLite is not supported in production; use PostgreSQL")
+        if self.env == "production" and "*" in self.cors_origins:
+            raise RuntimeError("CORS_ORIGINS='*' is not allowed in production; list exact origins")
         if not self.secret_key:
             if self.env == "production":
                 raise RuntimeError("SECRET_KEY must be set in production")

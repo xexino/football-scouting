@@ -98,6 +98,8 @@ def create_club(body: ClubIn, request: Request, user: Ctx = Depends(require("pla
                 db: Session = Depends(get_db)):
     if db.scalar(select(Club).where(Club.name == body.name, Club.country == body.country)):
         raise HTTPException(409, "Club already exists")
+    if body.league_id is not None and db.get(League, body.league_id) is None:
+        raise HTTPException(422, "Unknown league")
     club = Club(**body.model_dump())
     db.add(club)
     db.flush()

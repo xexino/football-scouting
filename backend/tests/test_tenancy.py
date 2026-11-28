@@ -195,10 +195,19 @@ def test_shared_account_cannot_be_hijacked(client, H, B):
     r = client.post("/api/users", headers=H["administrator"], json={
         "email": email, "full_name": "Consultant", "role": "data_analyst", "password": "Consult4nt-pass"})
     assert r.status_code == 201
+    # B cannot attach the existing account directly (no consent, would disclose PII) ...
     r = client.post("/api/users", headers=B["H"]["administrator"], json={
         "email": email, "full_name": "ignored", "role": "video_scout", "password": "Attack3r-pass!"})
-    assert r.status_code == 201  # membership added, credentials untouched
-    uid = r.json()["id"]
+    assert r.status_code == 409 and "Consultant" not in r.text
+    # ... only via an invitation that the owner accepts with their own password
+    inv = client.post("/api/users/invitations", headers=B["H"]["administrator"],
+                      json={"email": email, "role": "video_scout"}).json()
+    tok_inv = inv["invite_url"].rsplit("/", 1)[1]
+    assert client.post("/api/auth/invitations/accept", json={"token": tok_inv, "password": "Attack3r-pass!"}).status_code == 401
+    r = client.post("/api/auth/invitations/accept", json={"token": tok_inv, "password": "Consult4nt-pass"})
+    assert r.status_code == 200
+    uid = client.get("/api/auth/me", headers={"Authorization": f"Bearer {r.json()['access_token']}"}).json()["id"]
+
     assert client.patch(f"/api/users/{uid}", headers=B["H"]["administrator"], json={"password": "Attack3r-pass!"}).status_code == 403
     assert client.post("/api/auth/token", data={"username": email, "password": "Attack3r-pass!"}).status_code == 401
     tok = client.post("/api/auth/token", data={"username": email, "password": "Consult4nt-pass"}).json()["access_token"]

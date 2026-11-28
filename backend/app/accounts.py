@@ -65,3 +65,12 @@ def ensure_usable(token_row, kind: str) -> None:
         raise HTTPException(410, f"This {kind} link has already been used")
     if is_expired(token_row.expires_at):
         raise HTTPException(410, f"This {kind} link has expired")
+
+
+def invalidate_reset_tokens(db, user_id: int) -> None:
+    """Mark every unused password-reset token of a user as consumed."""
+    from sqlalchemy import update
+
+    from .models import PasswordResetToken, utcnow
+    db.execute(update(PasswordResetToken).where(PasswordResetToken.user_id == user_id,
+                                                PasswordResetToken.used_at.is_(None)).values(used_at=utcnow()))

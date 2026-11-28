@@ -6,12 +6,14 @@ from sqlalchemy.orm import Session
 
 from .. import audit
 from ..database import get_db
-from ..accounts import ensure_usable, hash_token
+from ..accounts import ensure_usable, hash_token, invalidate_reset_tokens
+from ..netutil import client_ip
 from ..models import Invitation, Membership, Organization, PasswordResetToken, User, utcnow
 from ..schemas import PasswordChange
 from ..security import (
     check_login_allowed,
     clear_failed_logins,
+    burn_password_check,
     create_access_token,
     decode_token,
     get_current_user,
@@ -37,9 +39,11 @@ def _active_memberships(db: Session, user: User) -> list[Membership]:
 def login(request: Request, form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     set_tenant(db, SYSTEM)  # trusted auth operation: reads identities, writes audit rows
     email = form.username.strip().lower()
-    ip = request.client.host if request.client else None  # behind a proxy: run uvicorn with --proxy-headers
+    ip = client_ip(request)
     check_login_allowed(db, email, ip)
     user = db.scalar(select(User).where(func.lower(User.email) == email))
+    if user is None:
+        burn_password_check(form.password)
     if user is None or not user.is_active or not verify_password(form.password, user.hashed_password):
         record_failed_login(db, email, ip)
         audit.log(db, None, "auth.login_failed", "user", None, {"email": email}, request)
@@ -96,6 +100,7 @@ def change_password(body: PasswordChange, request: Request, token: str = Depends
     set_tenant(db, SYSTEM)
     user.hashed_password = hash_password(body.new_password)
     user.token_version += 1  # revoke every other session
+    invalidate_reset_tokens(db, user.id)
     org_id = decode_token(token).get("org")
     audit.log(db, user, "auth.password_changed", "user", user.id, None, request,
               organization_id=org_id if isinstance(org_id, int) else None)
@@ -143,9 +148,16 @@ def accept_invitation(body: AcceptInvitation, request: Request, db: Session = De
         user = User(email=inv.email, full_name=body.full_name.strip(), hashed_password=hash_password(body.password))
         db.add(user)
         db.flush()
-    elif not user.is_active or not verify_password(body.password, user.hashed_password):
-        # proves the invitee controls the existing account; a leaked link cannot attach someone else's account
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Enter the current password of your existing account")
+    else:
+        # proves the invitee controls the existing account; a leaked link cannot attach someone else's
+        # account. Throttled exactly like login so it cannot be used as a password-guessing oracle.
+        ip = client_ip(request)
+        check_login_allowed(db, inv.email, ip)
+        if not user.is_active or not verify_password(body.password, user.hashed_password):
+            record_failed_login(db, inv.email, ip)
+            db.commit()
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Enter the current password of your existing account")
+        clear_failed_logins(db, inv.email)
     m = db.scalar(select(Membership).where(Membership.user_id == user.id, Membership.organization_id == org.id))
     if m is None:
         db.add(Membership(user_id=user.id, organization_id=org.id, role=inv.role, region=inv.region))
@@ -173,6 +185,7 @@ def reset_password(body: ResetPassword, request: Request, db: Session = Depends(
     user.hashed_password = hash_password(body.new_password)
     user.token_version += 1
     row.used_at = utcnow()
+    invalidate_reset_tokens(db, user.id)  # any other outstanding link dies too
     audit.log(db, user, "auth.password_reset", "user", user.id, None, request)
     db.commit()
     return {"status": "ok"}

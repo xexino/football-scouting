@@ -59,8 +59,14 @@ def _prompt_password() -> str:
 
 
 def create_org(slug: str, name: str, country: str = "", currency: str = "EUR", language: str = "en") -> None:
-    """Create a customer organization (never a demo organization)."""
+    """Create an organization. In a demo deployment it is a demo organization, in a customer
+    deployment a customer organization (the two must never be mixed)."""
+    import re
+
+    from .config import settings
     from .models import Organization
+    if not re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", slug) or len(slug) > 60:
+        sys.exit("Slug: lowercase letters, digits and hyphens only")
     init_db()
     with SessionLocal() as db:
         set_tenant(db, SYSTEM)
@@ -68,7 +74,7 @@ def create_org(slug: str, name: str, country: str = "", currency: str = "EUR", l
             sys.exit("Organization slug already exists")
         from .subscriptions import new_trial
         org = Organization(slug=slug, name=name, country=country or None, currency=currency.upper(),
-                           primary_language=language, is_demo=False, settings={})
+                           primary_language=language, is_demo=settings.deployment_mode == "demo", settings={})
         db.add(org)
         db.flush()
         db.add(new_trial(org.id))

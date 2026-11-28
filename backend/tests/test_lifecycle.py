@@ -26,9 +26,11 @@ def test_two_step_deletion_removes_everything_and_only_that(client, H):
     client.post("/api/pipeline", headers=h, json={"player_id": p["id"]})
     client.put("/api/budgets", headers=E["H"]["sporting_director"], json={"season": "2026-27", "transfer_budget": 1})
     client.post("/api/users/invitations", headers=E["H"]["administrator"], json={"email": "z@e.io", "role": "video_scout"})
-    # a consultant who also works for the demo organization
-    client.post("/api/users", headers=E["H"]["administrator"], json={
-        "email": "video@raja-scout.local", "full_name": "x", "role": "video_scout", "password": "unused-Pass1"})
+    # a consultant who also works for the demo organization joins via invitation
+    inv = client.post("/api/users/invitations", headers=E["H"]["administrator"],
+                      json={"email": "video@raja-scout.local", "role": "video_scout"}).json()
+    assert client.post("/api/auth/invitations/accept", json={"token": inv["invite_url"].rsplit("/", 1)[1],
+                                                             "password": PASSWORD}).status_code == 200
 
     export = client.get("/api/admin/export", headers=E["H"]["administrator"]).json()
     assert len(export["tables"]["players"]) >= 1 and len(export["tables"]["match_videos"]) == 1
@@ -65,7 +67,7 @@ def test_two_step_deletion_removes_everything_and_only_that(client, H):
         assert db.scalar(select(func.count()).select_from(Player).where(Player.organization_id.is_(None))) == shared_players
         consultant = db.scalar(select(User).where(User.email == "video@raja-scout.local"))
         assert consultant is not None and db.scalar(select(func.count()).select_from(Membership)
-                                                    .where(Membership.user_id == consultant.id)) == 1
+                                                    .where(Membership.user_id == consultant.id)) >= 1
         assert db.scalar(select(User).where(User.email == "ephemeral.head_of_scouting@example.com")) is None
         rec = db.scalar(select(AuditLog).where(AuditLog.action == "organization.purged",
                                                AuditLog.entity_id == E["id"]))

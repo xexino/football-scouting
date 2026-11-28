@@ -19,6 +19,7 @@ os.environ["MAX_LOGIN_ATTEMPTS_PER_IP"] = "10000"  # all test requests share one
 os.environ.setdefault("DEMO_PASSWORD", "RajaDemo2026!")
 
 import pytest  # noqa: E402
+from sqlalchemy import select  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.database import Base, engine  # noqa: E402
@@ -132,3 +133,26 @@ def B(client):
     org["source"] = client.post("/api/data-sources", headers=org["H"]["head_of_scouting"], json={
         "name": "Rival licensed feed", "source_type": "api_import", "license_notes": "Rival contract"}).json()
     return org
+
+
+from contextlib import contextmanager  # noqa: E402
+
+
+@contextmanager
+def demo_only_database():
+    """Temporarily mark customer organizations created by other tests as demo, so tests of the
+    demo/customer separation guard see a clean demo database regardless of test order."""
+    with _sys() as db:
+        ids = list(db.scalars(select(Organization.id).where(Organization.is_demo.is_(False))).all())
+        for i in ids:
+            db.get(Organization, i).is_demo = True
+        db.commit()
+    try:
+        yield
+    finally:
+        with _sys() as db:
+            for i in ids:
+                o = db.get(Organization, i)
+                if o is not None:
+                    o.is_demo = False
+            db.commit()
