@@ -1,0 +1,1 @@
+[{"id": 1, "user_id": 2, "user_email": "director@raja-scout.local", "action": "auth.login", "entity_type": "user", "entity_id": 2, "details": null, "ip_address": "testclient", "created_at": "2026-11-28T10:26:07.634047"}]
