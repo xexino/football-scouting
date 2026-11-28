@@ -16,7 +16,6 @@ SaaS architecture and sprint records: [docs/saas/](docs/saas/).
 
 | Option | Best for | How |
 |---|---|---|
-| **GitHub Pages (live demo)** | Instant look, nothing to install | **https://xexino.github.io/football-scouting/** — a public, read-only snapshot of the fictional demo club (search, filters, comparison, pipeline, reports, video). No login; changes are not saved. Rebuilt automatically by `.github/workflows/pages.yml` on every push. |
 | **GitHub Codespaces** | Private use, straight from GitHub | [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/xexino/football-scouting) → click **Create codespace**, wait ~3 min; the app opens in a new tab (or open the **Ports** tab → port 8000 → 🌐). |
 | **Render** | A permanent web address to share with staff | [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/xexino/football-scouting) → sign in with GitHub, choose a **DEMO_PASSWORD**, click **Apply**. Your URL looks like `https://raja-scout-xxxx.onrender.com`. |
 | **Your own server** | Production use by the club | See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). |
@@ -24,7 +23,7 @@ SaaS architecture and sprint records: [docs/saas/](docs/saas/).
 Log in with `director@raja-scout.local` and the demo password (`RajaDemo2026!` in Codespaces,
 or the one you chose on Render).
 
-Notes: GitHub Pages only hosts the static read-only demo; the full platform (logins, your own club's data, saving) needs a server and a database. A codespace
+Notes: GitHub Pages cannot host this app (it needs a server and a database). A codespace
 stops after 30 min idle — reopen it from **Code → Codespaces**; free personal accounts get a
 monthly quota of hours. On Render's free plan the site sleeps when unused (first visit takes
 ~1 min) and the free database expires after 30 days, so upgrade the database plan before

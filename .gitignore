@@ -7,4 +7,3 @@ venv/
 *.sqlite
 .pytest_cache/
 backups/
-site/
